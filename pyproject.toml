@@ -1,0 +1,14 @@
+[project]
+name = "mt-exploration"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "langchain-text-splitters>=1.1.1",
+    "mcp>=1.27.0",
+    "neo4j>=6.1.0",
+    "openai>=2.30.0",
+    "pydantic-graph>=1.70.0",
+    "uuid>=1.30",
+]
