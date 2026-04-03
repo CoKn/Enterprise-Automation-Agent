@@ -23,8 +23,8 @@ class NodeType(Enum):
 class Node:
     id: uuid4 = uuid4()
     value: str  # holds goal
-    status: NodeStatus = NodeStatus.pending
-    type: NodeType = NodeType.abstract
+    node_status: NodeStatus = NodeStatus.pending
+    node_type: NodeType = NodeType.abstract
     created_at: datetime = field(default_factory=datetime.now)
 
     # annotations for agent

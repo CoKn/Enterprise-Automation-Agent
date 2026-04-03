@@ -11,7 +11,6 @@ class Tools(ABC):
     async def disconnect(self):
         ...
 
-
     @abstractmethod
     async def get_available_tools(self):
         ...
