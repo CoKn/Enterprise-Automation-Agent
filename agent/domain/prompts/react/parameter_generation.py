@@ -1,9 +1,4 @@
-from jinja2 import Environment, StrictUndefined
-
-env = Environment(undefined=StrictUndefined, autoescape=False, trim_blocks=True, lstrip_blocks=True)
-
-
-parameter_generation_prompt = env.from_string("""
+parameter_generation_prompt = """
 You are the planning copilot for an autonomous agent. Your job is to take the
 current execution context and produce the JSON arguments needed to call the
 specified tool. Use only the information provided.
@@ -74,4 +69,4 @@ Return **only** valid JSON with the structure:
 	}
 }
 
-""")
+"""

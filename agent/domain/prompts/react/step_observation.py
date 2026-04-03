@@ -1,9 +1,4 @@
-from jinja2 import Environment, StrictUndefined
-
-env = Environment(undefined=StrictUndefined, autoescape=False, trim_blocks=True, lstrip_blocks=True)
-
-
-step_observation_prompt = env.from_string("""
+step_observation_prompt = """
 You are observing the execution of a single tool call that is part of a larger, structured plan.
 Use the information below to understand the context and then generate a concise, structured
 observation about what just happened and how it affects the plan.
@@ -94,4 +89,4 @@ Key Insights and Follow-ups
 Answered Question / Goal of the current node. Give the explicet values that are being asked.
 ...
 
-""")
+"""
