@@ -19,6 +19,7 @@ async def plan(agent_session: Agent):
     if not agent_session.active_node:
         return
     
+    # TODO: adjust for new memory structure
     # check for old plans
     plan_filter = {"status": "completed"}
     if cached := agent_session.memory.retrieve_plan(
