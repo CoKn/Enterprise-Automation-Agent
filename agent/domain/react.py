@@ -20,6 +20,8 @@ async def plan(agent_session: Agent):
         return
     
     # TODO: adjust for new memory structure
+
+    # retrieve plan or context (episodic memory) or semantic memory or None
     # check for old plans
     plan_filter = {"status": "completed"}
     if cached := agent_session.memory.retrieve_plan(
@@ -36,7 +38,7 @@ async def plan(agent_session: Agent):
         return
 
     # If the current node is still abstract, ask the planner to expand it.
-    if agent_session.active_node.type == NodeType.abstract:
+    if agent_session.active_node.node_type == NodeType.abstract:
         agent_session.context = await agent_session.planner.plan(
             context=agent_session.context,
             root=agent_session.active_node
@@ -54,12 +56,12 @@ async def plan(agent_session: Agent):
             logger.info(
                 "Planner produced actionable node goal='%s' type=%s",
                 agent_session.active_node.value,
-                agent_session.active_node.type.name,
+                agent_session.active_node.node_type.name,
             )
         else:
             return
 
-    if agent_session.active_node.type == NodeType.parcially_planned:
+    if agent_session.active_node.node_type == NodeType.parcially_planned:
 
         # build context for parameter generation
         previous_nodes_list = agent_session.context.previous_nodes(agent_session.active_node)
@@ -87,10 +89,10 @@ async def plan(agent_session: Agent):
 
         try:
             agent_session.active_node.tool_args = json.loads(resp).get("arguments")
-            agent_session.active_node.type = NodeType.fully_planned
+            agent_session.active_node.node_type = NodeType.fully_planned
             return
         except json.JSONDecodeError as e:
-            agent_session.active_node.status = NodeStatus.failed
+            agent_session.active_node.node_status = NodeStatus.failed
 
             # bubble up failure status to parents
             agent_session.context.recompute_statuses()
@@ -112,8 +114,8 @@ async def act(agent_session: Agent):
         return
     
     # if the current node is abstract do not try to execute
-    if agent_session.active_node.type == NodeType.abstract:
-        agent_session.active_node.status = NodeStatus.failed
+    if agent_session.active_node.node_type == NodeType.abstract:
+        agent_session.active_node.node_status = NodeStatus.failed
 
         # bubble up failure status to parents
         agent_session.context.recompute_statuses()
@@ -126,8 +128,8 @@ async def act(agent_session: Agent):
         )
     
     # if the current node is parcially planned do not try to execute
-    if agent_session.active_node.type == NodeType.parcially_planned:
-        agent_session.active_node.status = NodeStatus.failed
+    if agent_session.active_node.node_type == NodeType.parcially_planned:
+        agent_session.active_node.node_status = NodeStatus.failed
 
         # bubble up failure status to parents
         agent_session.context.recompute_statuses()
@@ -143,7 +145,7 @@ async def act(agent_session: Agent):
     # case fully planned:
     tool_name = agent_session.active_node.tool_name
     if not tool_name:
-        agent_session.active_node.status = NodeStatus.failed
+        agent_session.active_node.node_status = NodeStatus.failed
 
         # bubble up failure status to parents
         agent_session.context.recompute_statuses()
@@ -175,7 +177,7 @@ async def act(agent_session: Agent):
         return
     
     except Exception as e:
-        agent_session.active_node.status = NodeStatus.failed
+        agent_session.active_node.node_status = NodeStatus.failed
 
         # bubble up failure status to parents
         agent_session.context.recompute_statuses()
@@ -223,7 +225,7 @@ async def observe(agent_session: Agent):
     )
 
     # mark active node as complete
-    agent_session.active_node.status = NodeStatus.completed
+    agent_session.active_node.node_status = NodeStatus.completed
 
     # bubble up completion to parents
     agent_session.context.recompute_statuses()
