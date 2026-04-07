@@ -1,11 +1,15 @@
 # planner for generating new planns
 import json
 
+from agent.logging import get_logger
+
 from agent.domain.context import Node, Context
 from agent.domain.prompts.planner.planning_prompt import PLANNING_PROMPT
+
 from agent.application.ports.outbound.llm_interface import LLM
 from agent.application.ports.outbound.context_serializer_interface import ContextSerializer
 
+logger = get_logger(__name__)
 
 class Planner:
     llm: LLM
@@ -32,6 +36,11 @@ class Planner:
             "root": root_payload,
             "context": context_payload,
         }
+
+        logger.info(
+            "Userpayload: goal='%(goal)s' root=%(root)s context=%(context)s",
+            user_payload,
+        )
 
         # 3. send prompt to LLM
         result: str = self.llm.call(

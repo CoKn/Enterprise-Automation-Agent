@@ -2,6 +2,8 @@ from typing import List, Optional
 from uuid import uuid4
 
 from agent.domain.context import Node, Context
+from agent.domain.planner import Planner
+
 from agent.application.ports.outbound.llm_interface import LLM
 from agent.application.ports.outbound.tool_interface import Tools
 from agent.application.ports.outbound.memory_interface import Memory
@@ -21,12 +23,14 @@ class Agent:
     tools: Tools
     llm: LLM
     memory: Memory
+    planner: Planner
 
-    def __init__(self, max_steps: int, llm: LLM, tools: Tools, memory: Memory):
+    def __init__(self, max_steps: int, llm: LLM, tools: Tools, memory: Memory, planner: Planner):
         self.max_steps = max_steps
         self.tools = tools
         self.llm = llm
         self.memory = memory
+        self.planner = planner
         self.context = None
         self.active_node = None
         self.global_goal_answer = None
