@@ -45,3 +45,7 @@ class Node:
     next: Optional[uuid4] = None
     previous: Optional[uuid4] = None
 
+
+class Context:
+    # a list of root nodes to build the trees from
+    context: list[Node]

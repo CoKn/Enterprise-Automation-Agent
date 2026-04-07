@@ -8,9 +8,11 @@ from pydantic import BaseModel
 from agent.adapter.outbound.mcp_oauth_flow import enqueue_oauth_callback
 from agent.domain.agent import Agent
 from agent.domain.react import loop_run_cycle
-from agent.singletons import memory, llm, tools, planner
+# from agent.singletons import memory, llm, tools, planner
 from agent.domain.context import Context, Node
 from agent.adapter.serialization.context import context_to_dict
+from agent.adapter.inbound.http.dependencies import get_tools, get_llm, get_memory
+
 
 router = APIRouter()
 oauth_router = APIRouter(tags=["oauth"])
@@ -43,7 +45,7 @@ async def mcp_oauth_callback(
 @oauth_router.get("/mcp/oauth/pending")
 async def pending_oauth():
     # works even while MCP connect is waiting
-    return {"pending": getattr(tools, "get_pending_oauth_urls")()}
+    return {"pending": getattr(get_tools(), "get_pending_oauth_urls")()}
 
 
 @router.post("/agent", response_model=AgentResponse)
@@ -51,7 +53,7 @@ async def call_agent(req: PromptRequest, request: Request):
     if not getattr(request.app.state, "mcp_ready", False):
         raise HTTPException(status_code=503, detail="MCP not ready yet")
 
-    agent_session = Agent(max_steps=3, tools=tools, llm=llm, planner=planner, memory=memory)
+    agent_session = Agent(max_steps=3, tools=get_tools(), llm=get_llm(), memory=get_memory())
 
     root_node = Node(value=req.prompt)
     agent_session.context = Context(data_structure=[root_node])
@@ -68,7 +70,7 @@ async def get_tool_details(tool_name: str, request: Request):
         raise HTTPException(status_code=503, detail="MCP not ready yet")
 
     try:
-        spec = tools.get_tool_spec(tool_name)
+        spec = get_tools().get_tool_spec(tool_name)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=f"Tool '{tool_name}' not found") from exc
 
@@ -80,5 +82,5 @@ async def list_tools(request: Request):
     if not getattr(request.app.state, "mcp_ready", False):
         raise HTTPException(status_code=503, detail="MCP not ready yet")
 
-    tool_names = await tools.get_available_tools()
+    tool_names = await get_tools().get_available_tools()
     return {"tools": tool_names}
