@@ -1,7 +1,7 @@
 # planner for generating new planns
 import json
 
-from agent.logging import get_logger
+from agent.logger import get_logger
 
 from agent.domain.context import Node, Context
 from agent.domain.prompts.planner.planning_prompt import PLANNING_PROMPT
@@ -20,7 +20,7 @@ class Planner:
         self.serializer = serializer
 
     # TODO: question is how tools are processed
-    def plan(self, root: Node, context: Context, tool_docs: str):
+    def plan(self, root: Node, context: Context, tool_docs: str = ""):
 
         # 1. load planning prompt and format prompt (takes: root node, tool specs, context (for episodic memory and previous nodes))
         system_prompt = PLANNING_PROMPT.format(tool_docs=tool_docs or "")

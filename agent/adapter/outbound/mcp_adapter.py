@@ -108,6 +108,9 @@ class MCPAdapter(Tools):
         ]
         return json.dumps(payload, ensure_ascii=False)
 
+    def get_pending_oauth_urls(self):
+        return dict(self._pending_oauth_urls)
+
     def get_tool_spec(self, tool_name: str):
         rt = self._tools[tool_name]
         return {

@@ -7,7 +7,7 @@ from agent.application.usecases.prompt_rendering import render_prompt
 from agent.domain.prompts.react.step_observation import step_observation_prompt
 from agent.domain.prompts.react.parameter_generation import parameter_generation_prompt
 
-from agent.logging import get_logger
+from agent.logger import get_logger
 
 import json
 

@@ -6,7 +6,7 @@ from fastapi import FastAPI
 
 from agent.bootstrap import build_container
 from agent.adapter.inbound.http.api import router, oauth_router
-from agent.logging import configure_logging, get_logger
+from agent.logger import configure_logging, get_logger
 
 configure_logging()
 logger = get_logger(__name__)

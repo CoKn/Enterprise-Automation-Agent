@@ -3,18 +3,41 @@ from dataclasses import dataclass
 from pathlib import Path
 import json
 import os
+from typing import Any
+from dotenv import load_dotenv
 
 from agent.adapter.outbound.openai_adapter import OpenAIAdapter
 from agent.adapter.outbound.mcp_adapter import MCPAdapter, McpEndpointConfig
 from agent.adapter.outbound.mcp_token_storage import FileTokenStorage
-from agent.utility import check_if_folder_exists
+from agent.adapter.outbound.planner_json_serializer import ContextJsonSerializer
+from agent.domain.planner import Planner
+from agent.application.ports.outbound.memory_interface import Memory
+
+load_dotenv()
+
+def check_if_folder_exists(path: Path) -> Path:
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+class NullMemory(Memory):
+    def save(self, context):
+        return None
+
+    def query(self, query: str, filter: dict, n_results: int):
+        return []
+
+    def retrieve_plan(self, goal_text: str, clear_results: bool) -> Any:
+        return None
 
 
 @dataclass
 class AppContainer:
-    memory: ...
+    memory: Memory
     llm: OpenAIAdapter
     tools: MCPAdapter
+    context_serializer: ContextJsonSerializer
+    planner: Planner
 
     async def start(self):
         await self.tools.connect()
@@ -24,9 +47,8 @@ class AppContainer:
 
 
 def build_container(base_dir: Path) -> AppContainer:
-    # TODO: add memory
-    db_path = check_if_folder_exists(base_dir / "db")
-    memory = ... # memory client
+    check_if_folder_exists(base_dir / "db")
+    memory = NullMemory()
 
     llm = OpenAIAdapter(
         api_key=os.getenv("OPENAI_API_KEY"),
@@ -37,8 +59,14 @@ def build_container(base_dir: Path) -> AppContainer:
     if not config_path.exists():
         raise ValueError("config.json does not exist")
 
-    raw = config_path.read_text(encoding="utf-8")
-    data = json.loads(raw)
+    raw = config_path.read_text(encoding="utf-8").strip()
+    if not raw:
+        data = []
+    else:
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"config.json contains invalid JSON: {config_path}") from exc
 
     if isinstance(data, list):
         endpoints_data = data
@@ -57,8 +85,13 @@ def build_container(base_dir: Path) -> AppContainer:
         token_storage=token_storage,
     )
 
+    context_serializer = ContextJsonSerializer()
+    planner = Planner(llm=llm, serializer=context_serializer)
+
     return AppContainer(
         memory=memory,
         llm=llm,
         tools=tools,
+        context_serializer=context_serializer,
+        planner=planner,
     )

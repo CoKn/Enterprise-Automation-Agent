@@ -30,8 +30,8 @@ class Agent:
         self.tools = tools
         self.llm = llm
         self.memory = memory
-        self.planner = planner
         self.context = None
         self.active_node = None
         self.global_goal_answer = None
         self.memory_context = None
+        self.planner = planner

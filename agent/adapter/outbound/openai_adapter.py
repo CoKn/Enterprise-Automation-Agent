@@ -1,4 +1,4 @@
-from agent.ports.outbound.llm_interface import LLM
+from agent.application.ports.outbound.llm_interface import LLM
 from openai import OpenAI, OpenAIError
 from pydantic import BaseModel, PrivateAttr
 

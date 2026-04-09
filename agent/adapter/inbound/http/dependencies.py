@@ -12,3 +12,9 @@ def get_llm(request: Request):
 
 def get_memory(request: Request):
     return request.app.state.container.memory
+
+def get_planner(request: Request):
+    return request.app.state.container.planner
+
+def get_context_serializer(request: Request):
+    return request.app.state.container.context_serializer

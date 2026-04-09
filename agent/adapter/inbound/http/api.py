@@ -1,7 +1,7 @@
 # agent/adapter/inbound/http/api.py
 from typing import Optional
 
-from fastapi import APIRouter, Query, Request, HTTPException
+from fastapi import APIRouter, Depends, Query, Request, HTTPException
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
@@ -9,9 +9,8 @@ from agent.adapter.outbound.mcp_oauth_flow import enqueue_oauth_callback
 from agent.domain.agent import Agent
 from agent.domain.react import loop_run_cycle
 from agent.domain.context import Context, Node
+from agent.adapter.inbound.http.dependencies import get_tools, get_llm, get_memory, get_planner
 from agent.adapter.serialization.context import context_to_dict
-from agent.adapter.inbound.http.dependencies import get_tools, get_llm, get_memory
-
 
 router = APIRouter()
 oauth_router = APIRouter(tags=["oauth"])
@@ -42,25 +41,32 @@ async def mcp_oauth_callback(
     return PlainTextResponse("Auth received. You can close this tab.")
 
 @oauth_router.get("/mcp/oauth/pending")
-async def pending_oauth():
+async def pending_oauth(tools=Depends(get_tools)):
     # works even while MCP connect is waiting
-    return {"pending": getattr(get_tools(), "get_pending_oauth_urls")()}
+    return {"pending": tools.get_pending_oauth_urls()}
 
 
 @router.post("/agent", response_model=AgentResponse)
-async def call_agent(req: PromptRequest, request: Request):
+async def call_agent(
+    req: PromptRequest,
+    request: Request,
+    tools=Depends(get_tools),
+    llm=Depends(get_llm),
+    memory=Depends(get_memory),
+    planner=Depends(get_planner),
+):
     if not getattr(request.app.state, "mcp_ready", False):
         raise HTTPException(status_code=503, detail="MCP not ready yet")
 
-    agent_session = Agent(max_steps=3, tools=get_tools(), llm=get_llm(), memory=get_memory())
+    agent_session = Agent(max_steps=3, tools=tools, llm=llm, memory=memory, planner=planner)
 
     root_node = Node(value=req.prompt)
-    agent_session.context = Context(data_structure=[root_node])
+    agent_session.context = Context(context=[root_node])
     agent_session.global_goal_node = root_node
 
     await loop_run_cycle(agent_session=agent_session)
     
-    return AgentResponse(context=context_to_dict(context=agent_session.context))
+    return AgentResponse(context=context_to_dict(agent_session.context))
 
 
 @router.get("/tools/{tool_name}", response_model=ToolSpecResponse)
@@ -69,7 +75,7 @@ async def get_tool_details(tool_name: str, request: Request):
         raise HTTPException(status_code=503, detail="MCP not ready yet")
 
     try:
-        spec = get_tools().get_tool_spec(tool_name)
+        spec = get_tools(request).get_tool_spec(tool_name)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=f"Tool '{tool_name}' not found") from exc
 
@@ -81,5 +87,5 @@ async def list_tools(request: Request):
     if not getattr(request.app.state, "mcp_ready", False):
         raise HTTPException(status_code=503, detail="MCP not ready yet")
 
-    tool_names = await get_tools().get_available_tools()
+    tool_names = await get_tools(request).get_available_tools()
     return {"tools": tool_names}
