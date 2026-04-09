@@ -3,13 +3,11 @@ from typing import List
 from bs4.element import AttributeValueList
 import requests
 from ddgs import DDGS
-from html_to_markdown import convert_to_markdown
 from bs4 import BeautifulSoup
 
 # MCP server
 mcp = FastMCP(
-    name="Websearch and scraping",
-    json_response=True
+    name="Websearch and scraping"
 )
 
 # MCP Tools
@@ -102,8 +100,25 @@ def get_website_content(url: str) -> str:
         if a_tag.find('img') or a_tag.find('svg'):
             a_tag.decompose()
 
+    for link in soup.find_all('a'):
+        href = link.get('href')
+        text = link.get_text(' ', strip=True)
+        if href and text:
+            link.replace_with(f'[{text}]({href})')
+        elif href:
+            link.replace_with(href)
+        else:
+            link.replace_with(text)
 
-    return convert_to_markdown(str(soup))[:500]
+    for line_break in soup.find_all('br'):
+        line_break.replace_with('\n')
+
+    for block in soup.find_all(['p', 'div', 'section', 'article', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6']):
+        block.insert_before('\n')
+        block.insert_after('\n')
+
+    content = soup.get_text(separator=' ', strip=True)
+    return ' '.join(content.split())[:500]
 
 
 @mcp.tool()

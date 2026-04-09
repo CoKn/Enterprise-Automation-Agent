@@ -26,7 +26,8 @@ async def plan(agent_session: Agent):
     plan_filter = {"status": "completed"}
     if cached := agent_session.memory.retrieve_plan(
         agent_session.active_node.value,
-        memory_filter=plan_filter,
+        # TODO: change or remove
+        # memory_filter=plan_filter,
         clear_results=True,
     ):
         agent_session.context = cached
@@ -39,7 +40,7 @@ async def plan(agent_session: Agent):
 
     # If the current node is still abstract, ask the planner to expand it.
     if agent_session.active_node.node_type == NodeType.abstract:
-        agent_session.context = await agent_session.planner.plan(
+        agent_session.context = agent_session.planner.plan(
             context=agent_session.context,
             root=agent_session.active_node
         )
