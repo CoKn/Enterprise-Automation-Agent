@@ -21,7 +21,7 @@ class NodeType(Enum):
 
 @dataclass
 class Node:
-    id: uuid4 = uuid4()
+    id: uuid4 = field(default_factory=uuid4)
     value: str  # holds goal
     node_status: NodeStatus = NodeStatus.pending
     node_type: NodeType = NodeType.abstract

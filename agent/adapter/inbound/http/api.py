@@ -8,7 +8,6 @@ from pydantic import BaseModel
 from agent.adapter.outbound.mcp_oauth_flow import enqueue_oauth_callback
 from agent.domain.agent import Agent
 from agent.domain.react import loop_run_cycle
-# from agent.singletons import memory, llm, tools, planner
 from agent.domain.context import Context, Node
 from agent.adapter.serialization.context import context_to_dict
 from agent.adapter.inbound.http.dependencies import get_tools, get_llm, get_memory
