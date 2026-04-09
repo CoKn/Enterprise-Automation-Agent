@@ -11,24 +11,24 @@ The app currently uses:
 ## Requirements
 
 - Python 3.13+
+- `uv` installed
 - An OpenAI API key
 - At least one running MCP server (default: local web search server on port 8003)
 
 ## Installation
 
-1. Create and activate a virtual environment:
+1. Create the virtual environment with `uv`:
 
-```bash
-python3.13 -m venv .venv
-source .venv/bin/activate
-```
+    ```bash
+    uv venv --python 3.13
+    source .venv/bin/activate
+    ```
 
 2. Install dependencies:
 
-```bash
-pip install -e .
-pip install python-dotenv
-```
+    ```bash
+    uv sync
+    ```
 
 3. Create a `.env` file in the project root:
 
@@ -66,7 +66,7 @@ Start the bundled websearch MCP server first:
 
 ```bash
 source .venv/bin/activate
-python tools/websearch.py
+uv run python tools/websearch.py
 ```
 
 It serves MCP over streamable HTTP at `http://localhost:8003/mcp`.
@@ -77,7 +77,7 @@ In a second terminal:
 
 ```bash
 source .venv/bin/activate
-python -m agent.main
+uv run python -m agent.main
 ```
 
 The API starts on `http://localhost:8090`.
@@ -107,37 +107,7 @@ curl http://localhost:8090/v1/tools/Websearch_Scraping.search_web
 ## Runtime Flow
 
 1. API receives a prompt at `POST /v1/agent`.
-1. A root planning node is created.
-1. Planner generates a node tree with tool steps.
-1. React loop runs: `plan -> act -> observe`.
-1. MCP tool calls execute through the configured endpoint(s).
-
-## Project Structure
-
-```text
-agent/
-  main.py                         # FastAPI app entrypoint and lifespan
-  bootstrap.py                    # Dependency/container setup
-  config.json                     # MCP endpoint configuration
-  domain/
-    agent.py                      # Agent session state object
-    context.py                    # Node/Context models and traversal logic
-    planner.py                    # Planner orchestration
-    react.py                      # plan/act/observe loop
-    prompts/
-      planner/planning_prompt.py
-      react/parameter_generation.py
-      react/step_observation.py
-  adapter/
-    inbound/http/api.py           # HTTP routes
-    inbound/http/dependencies.py  # FastAPI DI helpers
-    outbound/openai_adapter.py    # OpenAI chat wrapper
-    outbound/mcp_adapter.py       # MCP client and tool execution
-    outbound/jinja_template_renderer.py
-    outbound/planner_json_serializer.py
-    serialization/
-      context.py
-      node.py
-tools/
-  websearch.py                    # Local MCP server (search + scraping)
-```
+2. A root planning node is created.
+3. Planner generates a node tree with tool steps.
+4. React loop runs: `plan -> act -> observe`.
+5. MCP tool calls execute through the configured endpoint(s).
