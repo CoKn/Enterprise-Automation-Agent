@@ -9,7 +9,13 @@ from agent.adapter.outbound.mcp_oauth_flow import enqueue_oauth_callback
 from agent.domain.agent import Agent
 from agent.domain.react import loop_run_cycle
 from agent.domain.context import Context, Node
-from agent.adapter.inbound.http.dependencies import get_tools, get_llm, get_memory, get_planner
+from agent.adapter.inbound.http.dependencies import (
+    get_tools,
+    get_llm,
+    get_memory,
+    get_planner,
+    get_template_renderer,
+)
 from agent.adapter.serialization.context import context_to_dict
 
 router = APIRouter()
@@ -54,11 +60,19 @@ async def call_agent(
     llm=Depends(get_llm),
     memory=Depends(get_memory),
     planner=Depends(get_planner),
+    template_renderer=Depends(get_template_renderer),
 ):
     if not getattr(request.app.state, "mcp_ready", False):
         raise HTTPException(status_code=503, detail="MCP not ready yet")
 
-    agent_session = Agent(max_steps=3, tools=tools, llm=llm, memory=memory, planner=planner)
+    agent_session = Agent(
+        max_steps=3,
+        tools=tools,
+        llm=llm,
+        memory=memory,
+        planner=planner,
+        template_renderer=template_renderer,
+    )
 
     root_node = Node(value=req.prompt)
     agent_session.context = Context(roots=[root_node])

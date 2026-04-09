@@ -10,8 +10,10 @@ from agent.adapter.outbound.openai_adapter import OpenAIAdapter
 from agent.adapter.outbound.mcp_adapter import MCPAdapter, McpEndpointConfig
 from agent.adapter.outbound.mcp_token_storage import FileTokenStorage
 from agent.adapter.outbound.planner_json_serializer import ContextJsonSerializer
+from agent.adapter.outbound.jinja_template_renderer import JinjaTemplateRenderer
 from agent.domain.planner import Planner
 from agent.application.ports.outbound.memory_interface import Memory
+from agent.application.ports.outbound.template_renderer_interface import TemplateRenderer
 
 load_dotenv()
 
@@ -38,6 +40,7 @@ class AppContainer:
     tools: MCPAdapter
     context_serializer: ContextJsonSerializer
     planner: Planner
+    template_renderer: TemplateRenderer
 
     async def start(self):
         await self.tools.connect()
@@ -87,6 +90,7 @@ def build_container(base_dir: Path) -> AppContainer:
 
     context_serializer = ContextJsonSerializer()
     planner = Planner(llm=llm, serializer=context_serializer)
+    template_renderer = JinjaTemplateRenderer()
 
     return AppContainer(
         memory=memory,
@@ -94,4 +98,5 @@ def build_container(base_dir: Path) -> AppContainer:
         tools=tools,
         context_serializer=context_serializer,
         planner=planner,
+        template_renderer=template_renderer,
     )

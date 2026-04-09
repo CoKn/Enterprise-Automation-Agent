@@ -40,9 +40,11 @@ async def plan(agent_session: Agent):
 
     # If the current node is still abstract, ask the planner to expand it.
     if agent_session.active_node.node_type == NodeType.abstract:
+        tool_docs = await agent_session.tools.get_tools_json()
         agent_session.context = agent_session.planner.plan(
             context=agent_session.context,
-            root=agent_session.active_node
+            root=agent_session.active_node,
+            tool_docs=tool_docs,
         )
 
         # update agent session with new context, global goal node and active node

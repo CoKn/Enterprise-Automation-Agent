@@ -16,5 +16,8 @@ def get_memory(request: Request):
 def get_planner(request: Request):
     return request.app.state.container.planner
 
+def get_template_renderer(request: Request):
+    return request.app.state.container.template_renderer
+
 def get_context_serializer(request: Request):
     return request.app.state.container.context_serializer

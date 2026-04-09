@@ -53,6 +53,11 @@ For JSON output:
    - Internal planning nodes (with children) MUST have type = "abstract" and tool_name = null, tool_args = null.
    - Continue decomposing until you reach concrete actions that map to MCP tools (leaf nodes with an MCP tool).
    - Ensure each concrete action maps to an available MCP tool.
+  - Tool name selection is STRICT:
+    * Use ONLY tool names listed in Available Tools.
+    * Use the exact value of the "name" field from Available Tools.
+    * Tool names are namespaced keys and typically look like "<server_id>.<mcp_name>".
+    * Do NOT invent aliases or variants such as adding/removing suffixes like "_tool".
    - Maintain logical dependencies between goals.
    - Each goal should be measurable and have clear completion criteria expressed via preconditions and effects.
 
@@ -192,6 +197,7 @@ Return exactly this JSON structure (all nodes must respect the Node fields above
     - Have "tool_args": null (partially planned).
   * ALL leaf nodes (including the first) must include "preconditions" (array, 1-5 items) and "effects" (array, 1-5 items).
 - Leaf nodes are processed in document order (top to bottom, left to right in the tree).
+- Tool names MUST be exact strings taken from Available Tools "name" values only.
 
 Available Tools:
 {tool_docs}

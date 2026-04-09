@@ -7,6 +7,7 @@ from agent.domain.planner import Planner
 from agent.application.ports.outbound.llm_interface import LLM
 from agent.application.ports.outbound.tool_interface import Tools
 from agent.application.ports.outbound.memory_interface import Memory
+from agent.application.ports.outbound.template_renderer_interface import TemplateRenderer
 
 
 class Agent:
@@ -24,12 +25,22 @@ class Agent:
     llm: LLM
     memory: Memory
     planner: Planner
+    template_renderer: TemplateRenderer
 
-    def __init__(self, max_steps: int, llm: LLM, tools: Tools, memory: Memory, planner: Planner):
+    def __init__(
+        self,
+        max_steps: int,
+        llm: LLM,
+        tools: Tools,
+        memory: Memory,
+        planner: Planner,
+        template_renderer: TemplateRenderer,
+    ):
         self.max_steps = max_steps
         self.tools = tools
         self.llm = llm
         self.memory = memory
+        self.template_renderer = template_renderer
         self.context = None
         self.active_node = None
         self.global_goal_answer = None

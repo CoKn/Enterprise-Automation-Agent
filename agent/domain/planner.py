@@ -23,7 +23,7 @@ class Planner:
     def plan(self, root: Node, context: Context, tool_docs: str = ""):
 
         # 1. load planning prompt and format prompt (takes: root node, tool specs, context (for episodic memory and previous nodes))
-        system_prompt = PLANNING_PROMPT.format(tool_docs=tool_docs or "")
+        system_prompt = PLANNING_PROMPT.format(tool_docs=tool_docs)
 
         # 2. serialize root and context and create payload
         root_payload = self.serializer.serialize_node(root)
