@@ -61,7 +61,8 @@ async def call_agent(
     agent_session = Agent(max_steps=3, tools=tools, llm=llm, memory=memory, planner=planner)
 
     root_node = Node(value=req.prompt)
-    agent_session.context = Context(context=[root_node])
+    agent_session.context = Context(roots=[root_node])
+    agent_session.context.rebuild_indexes()
     agent_session.global_goal_node = root_node
 
     await loop_run_cycle(agent_session=agent_session)

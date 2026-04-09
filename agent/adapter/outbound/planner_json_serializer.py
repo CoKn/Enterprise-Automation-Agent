@@ -9,6 +9,22 @@ from agent.domain.context import Context, Node, NodeStatus, NodeType
 
 
 class ContextJsonSerializer(ContextSerializer):
+    def _flatten_nodes_from_roots(self, roots: list[Node]) -> list[Node]:
+        result: list[Node] = []
+        seen: set[UUID] = set()
+        queue: list[Node] = list(roots)
+
+        while queue:
+            node = queue.pop(0)
+            if node.id in seen:
+                continue
+
+            seen.add(node.id)
+            result.append(node)
+            queue.extend(node.children)
+
+        return result
+
     def _to_jsonable(self, value: Any):
         if value is None:
             return None
@@ -47,8 +63,11 @@ class ContextJsonSerializer(ContextSerializer):
         if context is None:
             return None
 
-        nodes = getattr(context, "context", [])
-        return {"context": [self.serialize_node(node) for node in nodes]}
+        nodes = self._flatten_nodes_from_roots(context.roots)
+        return {
+            "context": [self.serialize_node(node) for node in nodes],
+            "root_ids": [self._to_jsonable(root.id) for root in context.roots],
+        }
 
     def _parse_uuid(self, value: Any):
         if value is None:
@@ -68,6 +87,8 @@ class ContextJsonSerializer(ContextSerializer):
         if isinstance(value, NodeStatus):
             return value
         if isinstance(value, str):
+            if value == "completed":
+                return NodeStatus.success
             return NodeStatus[value]
         return NodeStatus(value)
 
@@ -78,12 +99,17 @@ class ContextJsonSerializer(ContextSerializer):
             return NodeType[value]
         return NodeType(value)
 
+    def _parse_link_uuid(self, value: Any):
+        if isinstance(value, dict):
+            value = value.get("id")
+        return self._parse_uuid(value)
+
     def deserialize_node(self, payload: dict[str, Any]) -> Node:
         return Node(
             id=self._parse_uuid(payload.get("id")) or uuid4(),
             value=payload.get("value", ""),
-            node_status=self._parse_node_status(payload.get("node_status", "pending")),
-            node_type=self._parse_node_type(payload.get("node_type", "abstract")),
+            node_status=self._parse_node_status(payload.get("node_status", payload.get("status", "pending"))),
+            node_type=self._parse_node_type(payload.get("node_type", payload.get("type", "abstract"))),
             created_at=self._parse_datetime(payload.get("created_at")),
             preconditions=payload.get("preconditions") or [],
             effects=payload.get("effects") or [],
@@ -91,13 +117,35 @@ class ContextJsonSerializer(ContextSerializer):
             tool_args=payload.get("tool_args"),
             tool_response=payload.get("tool_response"),
             tool_response_summary=payload.get("tool_response_summary"),
-            next=self._parse_uuid(payload.get("next")),
-            previous=self._parse_uuid(payload.get("previous")),
+            next=self._parse_link_uuid(payload.get("next")),
+            previous=self._parse_link_uuid(payload.get("previous")),
         )
+
+    def _deserialize_tree_node(self, payload: dict[str, Any], parent: Node | None = None) -> Node:
+        node = self.deserialize_node(payload)
+        node.parent = parent
+
+        raw_children = payload.get("children") or []
+        children: list[Node] = []
+        for child_payload in raw_children:
+            if not isinstance(child_payload, dict):
+                continue
+            children.append(self._deserialize_tree_node(child_payload, parent=node))
+        node.children = children
+
+        return node
 
     def deserialize_context(self, payload: dict[str, Any] | None) -> Context | None:
         if payload is None:
             return None
+
+        # Accept planner output as nested tree payload: {"root": {...}}
+        raw_root = payload.get("root")
+        if isinstance(raw_root, dict):
+            root = self._deserialize_tree_node(raw_root)
+            context = Context(roots=[root])
+            context.rebuild_indexes()
+            return context
 
         raw_nodes = payload.get("context", [])
         nodes = [self.deserialize_node(node_payload) for node_payload in raw_nodes]
@@ -115,6 +163,13 @@ class ContextJsonSerializer(ContextSerializer):
                 if child_id in id_map
             ]
 
-        context = Context()
-        context.context = nodes
+        raw_root_ids = payload.get("root_ids", [])
+        parsed_root_ids = [self._parse_uuid(root_id) for root_id in raw_root_ids]
+
+        roots = [id_map[root_id] for root_id in parsed_root_ids if root_id in id_map]
+        if not roots:
+            roots = [node for node in nodes if node.parent is None]
+
+        context = Context(roots=roots)
+        context.rebuild_indexes()
         return context

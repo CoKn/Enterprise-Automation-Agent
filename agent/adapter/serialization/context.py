@@ -7,26 +7,22 @@ from agent.adapter.serialization.node import node_to_dict
 
 
 def context_to_dict(context: Context) -> Any:
-	"""Serialize a Context's data_structure into plain Python data.
+	"""Serialize Context roots into plain Python data.
 
-	- If the context holds a single Node, returns a dict.
-	- If it holds a list of Nodes, returns a list of dicts.
-	- If it is empty, returns None.
+	- Single root: returns one dict for backwards compatibility.
+	- Multiple roots: returns a list of root dicts.
+	- No roots: returns None.
 	"""
 
-	data = context.data_structure
+	roots = context.roots
 
-	if data is None:
+	if not roots:
 		return None
 
-	if isinstance(data, Node):
-		return node_to_dict(data)
+	if len(roots) == 1:
+		return node_to_dict(roots[0])
 
-	if isinstance(data, list):
-		return [node_to_dict(n) for n in data]
-
-	# Fallback: return as-is if it's some other type.
-	return data
+	return [node_to_dict(n) for n in roots]
 
 
 def to_json(context: Context, **json_kwargs: Any) -> str:

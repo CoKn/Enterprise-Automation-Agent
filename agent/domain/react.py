@@ -226,7 +226,7 @@ async def observe(agent_session: Agent):
     )
 
     # mark active node as complete
-    agent_session.active_node.node_status = NodeStatus.completed
+    agent_session.active_node.node_status = NodeStatus.success
 
     # bubble up completion to parents
     agent_session.context.recompute_statuses()

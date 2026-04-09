@@ -48,6 +48,12 @@ class Planner:
             system_prompt=system_prompt,
             json_mode=True,
         )
+
+        logger.info(
+            "Response: resp='%s'",
+            result,
+        )
+
         try:
             # 4. parse response
             plan = json.loads(result)
