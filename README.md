@@ -32,10 +32,10 @@ The app currently uses:
 
 3. Create a `.env` file in the project root:
 
-```env
-OPENAI_API_KEY=your_openai_api_key
-LLM_MODEL=gpt-4.1-mini
-```
+    ```env
+    OPENAI_API_KEY=your_openai_api_key
+    LLM_MODEL=gpt-4.1-mini
+    ```
 
 `LLM_MODEL` must be a model name available to your OpenAI account.
 
