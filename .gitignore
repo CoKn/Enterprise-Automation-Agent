@@ -9,6 +9,7 @@ wheels/
 # Virtual environments
 .venv
 .env
+secrets
 
 # test files
 exploration.ipynb
@@ -16,3 +17,5 @@ test_kg.ipynb
 
 # data
 data
+
+sql.sql

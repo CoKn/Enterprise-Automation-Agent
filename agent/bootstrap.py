@@ -11,6 +11,7 @@ from agent.adapter.outbound.mcp_adapter import MCPAdapter, McpEndpointConfig
 from agent.adapter.outbound.mcp_token_storage import FileTokenStorage
 from agent.adapter.outbound.planner_json_serializer import ContextJsonSerializer
 from agent.adapter.outbound.jinja_template_renderer import JinjaTemplateRenderer
+from agent.adapter.outbound.postgres_adapter import SqliteVecEpisodicMemoryAdapter
 from agent.domain.planner import Planner
 from agent.application.ports.outbound.memory_interface import Memory
 from agent.application.ports.outbound.template_renderer_interface import TemplateRenderer
@@ -26,7 +27,7 @@ class NullMemory(Memory):
     def save(self, context):
         return None
 
-    def query(self, query: str, filter: dict, n_results: int):
+    def query(self, query: str, filter: dict | None, n_results: int):
         return []
 
     def retrieve_plan(self, goal_text: str, clear_results: bool) -> Any:
@@ -46,12 +47,14 @@ class AppContainer:
         await self.tools.connect()
 
     async def stop(self):
+        close = getattr(self.memory, "close", None)
+        if callable(close):
+            close()
         await self.tools.disconnect()
 
 
 def build_container(base_dir: Path) -> AppContainer:
-    check_if_folder_exists(base_dir / "db")
-    memory = NullMemory()
+    db_dir = check_if_folder_exists(base_dir / "db")
 
     llm = OpenAIAdapter(
         api_key=os.getenv("OPENAI_API_KEY"),
@@ -87,6 +90,16 @@ def build_container(base_dir: Path) -> AppContainer:
         endpoints=endpoints,
         token_storage=token_storage,
     )
+
+    memory_db_path = os.getenv("EPISODIC_MEMORY_DB", str(db_dir / "episodic_memory.sqlite3"))
+    try:
+        memory: Memory = SqliteVecEpisodicMemoryAdapter(
+            db_path=memory_db_path,
+            openai_api_key=os.getenv("OPENAI_API_KEY"),
+        )
+    except Exception:
+        # Fallback keeps app bootable even when sqlite-vec/openai setup is unavailable.
+        memory = NullMemory()
 
     context_serializer = ContextJsonSerializer()
     planner = Planner(llm=llm, serializer=context_serializer)

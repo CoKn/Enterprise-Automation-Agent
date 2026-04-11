@@ -23,12 +23,8 @@ async def plan(agent_session: Agent):
 
     # retrieve plan or context (episodic memory) or semantic memory or None
     # check for old plans
-    plan_filter = {"status": "completed"}
-    if cached := agent_session.memory.retrieve_plan(
-        agent_session.active_node.value,
-        # TODO: change or remove
-        # memory_filter=plan_filter,
-        clear_results=True,
+    if cached := agent_session.memory.query(
+        goal=agent_session.active_node.value,
     ):
         agent_session.context = cached
         agent_session.global_goal_node = cached.get_root()
@@ -38,9 +34,10 @@ async def plan(agent_session: Agent):
         logger.info("Plan '%s'", agent_session.context)
         return
 
-    # If the current node is still abstract, ask the planner to expand it.
+    # If the current node is still abstract, ask the planner to expand it
     if agent_session.active_node.node_type == NodeType.abstract:
         tool_docs = await agent_session.tools.get_tools_json()
+
         agent_session.context = agent_session.planner.plan(
             context=agent_session.context,
             root=agent_session.active_node,
