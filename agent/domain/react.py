@@ -193,6 +193,15 @@ async def observe(agent_session: Agent):
     if not agent_session.active_node:
         return
 
+    # mark active node as complete
+    agent_session.active_node.node_status = NodeStatus.success
+
+    # bubble up completion to parents
+    agent_session.context.recompute_statuses()
+
+    # update node status in db 
+    agent_session.memory.save(context=agent_session.context)
+
     # build context for tool response summary
     global_goal = str(agent_session.global_goal_node)
     previous_nodes_list = agent_session.context.previous_nodes(agent_session.active_node)
@@ -224,14 +233,6 @@ async def observe(agent_session: Agent):
         agent_session.active_node.tool_response_summary,
     )
 
-    # mark active node as complete
-    agent_session.active_node.node_status = NodeStatus.success
-
-    # bubble up completion to parents
-    agent_session.context.recompute_statuses()
-
-    # update node status in db 
-    agent_session.memory.save(context=agent_session.context)
 
     # set next active node if a next node exists
     if (next_node := agent_session.context.next_node(agent_session.active_node)):

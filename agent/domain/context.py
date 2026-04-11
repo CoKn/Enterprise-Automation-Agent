@@ -69,6 +69,10 @@ class Node:
         return (
             f"- id={self.id} status={self.node_status.name} "
             f"type={self.node_type.name} goal={self.value}"
+            f"tool={self.tool_name} tool_args={self.tool_args}"
+            f"summary={self.tool_response_summary}"
+            f"preconditions={self.preconditions}"
+            f"effects={self.effects}"
         )
 
     def __str__(self) -> str:

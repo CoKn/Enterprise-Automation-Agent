@@ -11,7 +11,6 @@ from agent.adapter.outbound.mcp_adapter import MCPAdapter, McpEndpointConfig
 from agent.adapter.outbound.mcp_token_storage import FileTokenStorage
 from agent.adapter.outbound.planner_json_serializer import ContextJsonSerializer
 from agent.adapter.outbound.jinja_template_renderer import JinjaTemplateRenderer
-from agent.adapter.outbound.postgres_adapter import SqliteVecEpisodicMemoryAdapter
 from agent.domain.planner import Planner
 from agent.application.ports.outbound.memory_interface import Memory
 from agent.application.ports.outbound.template_renderer_interface import TemplateRenderer
@@ -27,7 +26,7 @@ class NullMemory(Memory):
     def save(self, context):
         return None
 
-    def query(self, query: str, filter: dict | None, n_results: int):
+    def query(self, goal: str, filter: dict | None=None):
         return []
 
     def retrieve_plan(self, goal_text: str, clear_results: bool) -> Any:
@@ -92,14 +91,8 @@ def build_container(base_dir: Path) -> AppContainer:
     )
 
     memory_db_path = os.getenv("EPISODIC_MEMORY_DB", str(db_dir / "episodic_memory.sqlite3"))
-    try:
-        memory: Memory = SqliteVecEpisodicMemoryAdapter(
-            db_path=memory_db_path,
-            openai_api_key=os.getenv("OPENAI_API_KEY"),
-        )
-    except Exception:
-        # Fallback keeps app bootable even when sqlite-vec/openai setup is unavailable.
-        memory = NullMemory()
+    
+    memory = NullMemory()
 
     context_serializer = ContextJsonSerializer()
     planner = Planner(llm=llm, serializer=context_serializer)

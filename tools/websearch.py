@@ -4,6 +4,7 @@ from bs4.element import AttributeValueList
 import requests
 from ddgs import DDGS
 from bs4 import BeautifulSoup
+from urllib.parse import urljoin
 
 # MCP server
 mcp = FastMCP(
@@ -100,25 +101,94 @@ def get_website_content(url: str) -> str:
         if a_tag.find('img') or a_tag.find('svg'):
             a_tag.decompose()
 
-    for link in soup.find_all('a'):
-        href = link.get('href')
-        text = link.get_text(' ', strip=True)
-        if href and text:
-            link.replace_with(f'[{text}]({href})')
-        elif href:
-            link.replace_with(href)
-        else:
-            link.replace_with(text)
+    extracted: list[str] = []
 
-    for line_break in soup.find_all('br'):
-        line_break.replace_with('\n')
+    # Include high-signal tags for navigation + content extraction in DOM order.
+    target_tags = [
+        'title', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+        'p', 'li', 'a',
+        'nav', 'main', 'section', 'article', 'aside',
+        'button', 'form', 'label', 'input', 'textarea', 'select', 'option',
+        'table', 'thead', 'tbody', 'tr', 'th', 'td',
+    ]
 
-    for block in soup.find_all(['p', 'div', 'section', 'article', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6']):
-        block.insert_before('\n')
-        block.insert_after('\n')
+    for tag in soup.find_all(target_tags):
+        name = tag.name
+        text = tag.get_text(' ', strip=True)
 
-    content = soup.get_text(separator=' ', strip=True)
-    return ' '.join(content.split())[:500]
+        if name == 'a':
+            href = tag.get('href')
+            if href and text:
+                extracted.append(f"LINK: {text} -> {urljoin(url, href)}")
+            elif href:
+                extracted.append(f"LINK: {urljoin(url, href)}")
+            continue
+
+        if name == 'button':
+            if text:
+                extracted.append(f"BUTTON: {text}")
+            continue
+
+        if name == 'form':
+            action = urljoin(url, tag.get('action') or url)
+            method = (tag.get('method') or 'get').upper()
+            extracted.append(f"FORM: method={method} action={action}")
+            continue
+
+        if name in {'input', 'textarea', 'select'}:
+            field_name = tag.get('name') or ''
+            field_type = tag.get('type') or name
+            placeholder = tag.get('placeholder') or ''
+            value = tag.get('value') or ''
+            extracted.append(
+                f"FIELD: name={field_name} type={field_type} placeholder={placeholder} value={value}".strip()
+            )
+            continue
+
+        if name == 'option':
+            value = tag.get('value') or ''
+            if text or value:
+                extracted.append(f"OPTION: text={text} value={value}".strip())
+            continue
+
+        if name in {'th', 'td'}:
+            if text:
+                extracted.append(f"{name.upper()}: {text}")
+            continue
+
+        if text:
+            extracted.append(f"{name.upper()}: {text}")
+
+    # Keep insertion order while dropping duplicates to reduce repetition.
+    unique_extracted = list(dict.fromkeys(extracted))
+    return '\n'.join(unique_extracted)[:6000]
+
+
+def get_page_title(url: str) -> str:
+    response = requests.get(url)
+    soup = BeautifulSoup(response.text, "html.parser")
+    title_tag = soup.find("title")
+    return title_tag.get_text(strip=True) if title_tag else ""
+
+
+def find_click_target(soup: BeautifulSoup, target: str, click_type: str):
+    target_lower = target.strip().lower()
+
+    if click_type == "link":
+        for anchor in soup.find_all("a"):
+            text = anchor.get_text(" ", strip=True).lower()
+            href = (anchor.get("href") or "").lower()
+            if target_lower == text or target_lower == href or target_lower in text:
+                return {"kind": "link", "element": anchor}
+
+    if click_type == "button":
+        for button in soup.find_all("button"):
+            text = button.get_text(" ", strip=True).lower()
+            value = (button.get("value") or "").lower()
+            if target_lower == text or target_lower == value or target_lower in text:
+                return {"kind": "button", "element": button}
+
+    return None
 
 
 @mcp.tool()
@@ -144,6 +214,120 @@ def search_web(query: str, max_results: int = 2) -> list[dict[str , str]]:
         web_content.append(data)
 
     return web_content
+
+
+@mcp.tool()
+def open_website(url: str) -> dict[str, str]:
+    """Open a specific website by URL and return cleaned page content.
+
+    Args:
+        url: The webpage URL to fetch and read.
+
+    Returns:
+        A dictionary containing the source URL and a cleaned text snapshot of the page.
+    """
+    content: str = get_website_content(url=url)
+    return {"url": url, "content": content}
+
+
+@mcp.tool()
+def navigate_website(url: str, target: str, click_type: str = "link") -> dict[str, str]:
+    """Navigate to a new page by clicking a link or button on a webpage.
+
+    Args:
+        url: The current page URL to inspect.
+        target: Visible link text, button text, or href/value to match.
+        click_type: Use "link" to follow anchors or "button" to submit a simple form button.
+
+    Returns:
+        A dictionary with the navigation result, including the destination URL and cleaned content.
+
+    Notes:
+        This handles standard links and basic HTML forms. It does not execute JavaScript-driven UI.
+    """
+    response = requests.get(url)
+    soup = BeautifulSoup(response.text, "html.parser")
+    click = find_click_target(soup, target=target, click_type=click_type)
+
+    if not click:
+        return {
+            "url": url,
+            "target": target,
+            "click_type": click_type,
+            "error": "No matching link or button was found on the page.",
+            "content": get_website_content(url=url),
+        }
+
+    element = click["element"]
+
+    if click["kind"] == "link":
+        href = element.get("href")
+        if not href:
+            return {
+                "url": url,
+                "target": target,
+                "click_type": click_type,
+                "error": "Matched link did not contain a usable href.",
+                "content": get_website_content(url=url),
+            }
+
+        next_url = urljoin(url, href)
+        return {
+            "url": next_url,
+            "target": target,
+            "click_type": click_type,
+            "title": get_page_title(next_url),
+            "content": get_website_content(next_url),
+        }
+
+    form = element.find_parent("form")
+    if form is None:
+        return {
+            "url": url,
+            "target": target,
+            "click_type": click_type,
+            "error": "Matched button is not inside a form, so there is nothing to submit.",
+            "content": get_website_content(url=url),
+        }
+
+    form_action = urljoin(url, form.get("action") or url)
+    form_method = (form.get("method") or "get").lower()
+    payload: dict[str, str] = {}
+
+    for input_tag in form.find_all(["input", "textarea", "select"]):
+        name = input_tag.get("name")
+        if not name:
+            continue
+
+        if input_tag.name == "input":
+            input_type = (input_tag.get("type") or "text").lower()
+            if input_type in {"submit", "button", "reset", "file"}:
+                continue
+            payload[name] = input_tag.get("value", "")
+        elif input_tag.name == "textarea":
+            payload[name] = input_tag.text or ""
+        else:
+            option = input_tag.find("option", selected=True) or input_tag.find("option")
+            payload[name] = option.get("value", option.get_text(strip=True)) if option else ""
+
+    button_name = element.get("name")
+    button_value = element.get("value") or element.get_text(" ", strip=True)
+    if button_name:
+        payload[button_name] = button_value
+
+    if form_method == "post":
+        next_response = requests.post(form_action, data=payload)
+    else:
+        next_response = requests.get(form_action, params=payload)
+
+    next_url = next_response.url
+    return {
+        "url": next_url,
+        "target": target,
+        "click_type": click_type,
+        "title": get_page_title(next_url),
+        "content": get_website_content(next_url),
+    }
 
 
 if __name__ == "__main__":
