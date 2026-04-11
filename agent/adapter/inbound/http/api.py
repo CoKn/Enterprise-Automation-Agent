@@ -1,5 +1,5 @@
 # agent/adapter/inbound/http/api.py
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, Query, Request, HTTPException
 from fastapi.responses import PlainTextResponse
@@ -36,6 +36,10 @@ class ToolSpecResponse(BaseModel):
     input_schema: dict
     server_id: str
     mcp_name: str
+
+
+class ToolInvokeRequest(BaseModel):
+    arguments: dict[str, Any] = {}
 
 
 @oauth_router.get("/mcp/oauth/callback", include_in_schema=False)
@@ -104,3 +108,27 @@ async def list_tools(request: Request):
 
     tool_names = await get_tools(request).get_available_tools()
     return {"tools": tool_names}
+
+
+@router.post("/tools/{tool_name}/invoke")
+async def invoke_tool(
+    tool_name: str,
+    payload: ToolInvokeRequest,
+    request: Request,
+):
+    if not getattr(request.app.state, "mcp_ready", False):
+        raise HTTPException(status_code=503, detail="MCP not ready yet")
+
+    tools = get_tools(request)
+
+    try:
+        tools.get_tool_spec(tool_name)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=f"Tool '{tool_name}' not found") from exc
+
+    try:
+        result = await tools.execute_tool(fn_name=tool_name, fn_args=payload.arguments)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Tool invocation failed: {exc}") from exc
+
+    return {"tool": tool_name, "result": result}

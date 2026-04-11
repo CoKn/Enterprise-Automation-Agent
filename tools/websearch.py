@@ -85,8 +85,12 @@ def get_website_content(url: str) -> str:
     Raises:
         requests.RequestException: If the HTTP request fails
     """
-    r = requests.get(url)
+    r = requests.get(url, timeout=20)
     soup = BeautifulSoup(r.text, 'html.parser')
+
+    # Remove non-content elements early.
+    for tag in soup.find_all(['script', 'style', 'noscript', 'template']):
+        tag.decompose()
 
     # Remove every <img> tag entirely
     for img_tag in soup.find_all('img'):
@@ -102,66 +106,97 @@ def get_website_content(url: str) -> str:
             a_tag.decompose()
 
     extracted: list[str] = []
+    seen: set[str] = set()
 
-    # Include high-signal tags for navigation + content extraction in DOM order.
-    target_tags = [
-        'title', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-        'p', 'li', 'a',
-        'nav', 'main', 'section', 'article', 'aside',
-        'button', 'form', 'label', 'input', 'textarea', 'select', 'option',
-        'table', 'thead', 'tbody', 'tr', 'th', 'td',
-    ]
+    def _push(line: str) -> None:
+        clean = " ".join(line.split())
+        if not clean or clean in seen:
+            return
+        seen.add(clean)
+        extracted.append(clean)
 
-    for tag in soup.find_all(target_tags):
-        name = tag.name
+    noise_tokens = {
+        'nav', 'navbar', 'menu', 'sidebar', 'footer', 'header', 'breadcrumb',
+        'pagination', 'social', 'cookie', 'subscribe', 'newsletter', 'ads',
+    }
+
+    def is_noise_container(tag) -> bool:
+        current = tag
+        while current is not None:
+            name = (getattr(current, 'name', '') or '').lower()
+            if name in {'nav', 'aside', 'footer'}:
+                return True
+
+            classes = " ".join(getattr(current, 'get', lambda *_: [])('class', []) or []).lower()
+            ident = (getattr(current, 'get', lambda *_: '')('id') or '').lower()
+            blob = f"{classes} {ident}"
+            if any(token in blob for token in noise_tokens):
+                return True
+
+            current = getattr(current, 'parent', None)
+        return False
+
+    def format_tag(tag) -> str | None:
+        name = (tag.name or '').lower()
         text = tag.get_text(' ', strip=True)
 
         if name == 'a':
             href = tag.get('href')
             if href and text:
-                extracted.append(f"LINK: {text} -> {urljoin(url, href)}")
-            elif href:
-                extracted.append(f"LINK: {urljoin(url, href)}")
-            continue
+                return f"LINK: {text} -> {urljoin(url, href)}"
+            if href:
+                return f"LINK: {urljoin(url, href)}"
+            return None
 
         if name == 'button':
-            if text:
-                extracted.append(f"BUTTON: {text}")
-            continue
+            return f"BUTTON: {text}" if text else None
 
         if name == 'form':
             action = urljoin(url, tag.get('action') or url)
             method = (tag.get('method') or 'get').upper()
-            extracted.append(f"FORM: method={method} action={action}")
-            continue
+            return f"FORM: method={method} action={action}"
 
         if name in {'input', 'textarea', 'select'}:
             field_name = tag.get('name') or ''
             field_type = tag.get('type') or name
             placeholder = tag.get('placeholder') or ''
             value = tag.get('value') or ''
-            extracted.append(
-                f"FIELD: name={field_name} type={field_type} placeholder={placeholder} value={value}".strip()
-            )
-            continue
+            return f"FIELD: name={field_name} type={field_type} placeholder={placeholder} value={value}"
 
         if name == 'option':
             value = tag.get('value') or ''
             if text or value:
-                extracted.append(f"OPTION: text={text} value={value}".strip())
-            continue
-
-        if name in {'th', 'td'}:
-            if text:
-                extracted.append(f"{name.upper()}: {text}")
-            continue
+                return f"OPTION: text={text} value={value}"
+            return None
 
         if text:
-            extracted.append(f"{name.upper()}: {text}")
+            return f"{name.upper()}: {text}"
+        return None
 
-    # Keep insertion order while dropping duplicates to reduce repetition.
-    unique_extracted = list(dict.fromkeys(extracted))
-    return '\n'.join(unique_extracted)[:6000]
+    # Prefer central content containers first (generic across websites).
+    content_roots = soup.select('main, article, [role="main"], section, body')
+    if not content_roots:
+        content_roots = [soup]
+
+    content_tags = [
+        'title', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+        'p', 'li', 'a', 'button', 'form', 'label',
+        'input', 'textarea', 'select', 'option',
+        'table', 'thead', 'tbody', 'tr', 'th', 'td',
+    ]
+
+    for root in content_roots:
+        for tag in root.find_all(content_tags):
+            # Keep actionable controls globally, but suppress noisy wrappers for generic text nodes.
+            if tag.name in {'p', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'label'} and is_noise_container(tag):
+                continue
+
+            line = format_tag(tag)
+            if line is None:
+                continue
+            _push(line)
+
+    return '\n'.join(extracted)[:12000]
 
 
 def get_page_title(url: str) -> str:
