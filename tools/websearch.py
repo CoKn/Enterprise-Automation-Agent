@@ -11,6 +11,7 @@ import requests
 mcp = FastMCP(name="Web Navigator")
 
 
+@mcp.tool()
 def search_web(query: str, max_results=2):
     results: list[dict[str, str]] = []
     with DDGS() as ddgs:
@@ -24,7 +25,10 @@ def search_web(query: str, max_results=2):
 
 
 @mcp.tool()
-def open_page(url: str):
+def open_and_navigate_page(url: str):
+    """
+    This tool opens a page based on a url. It can also be used to navigate to the correct link on a page.
+    """
     response = requests.get(url=url, timeout=20)
     response.raise_for_status()
     soup = BeautifulSoup(response.text, "html.parser")
@@ -37,7 +41,7 @@ def open_page(url: str):
         if not href or href == "#":
             continue
 
-        # gnore non-navigable pseudo links.
+        # Ignore non-navigable pseudo links.
         if href.startswith(("javascript:", "mailto:", "tel:")):
             continue
 
@@ -49,9 +53,9 @@ def open_page(url: str):
         urls.append(absolute_url)
 
     # convert html to markdown
-    h = markdownify.markdownify(soup, heading_style="ATX")
+    h = markdownify.markdownify(response.text, heading_style="ATX")
 
-    navigation_section = "\n".join(urls)
+    navigation_section = " \n".join(urls)
     return (
         "navigation:\n"
         f"{navigation_section}\n\n"
