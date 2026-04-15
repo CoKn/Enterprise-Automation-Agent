@@ -50,37 +50,39 @@ class ChromadbAdapter(Memory):
         candidate = str(candidate).strip()
         return candidate if candidate in self._COLLECTIONS else None
 
-    def _build_context_from_node_id(self, node_id: str) -> Context:
+    def _build_node_dict_from_metadata(self, node_id: str) -> Dict[str, Any] | None:
+        """Build a single node dict from database metadata."""
         value_collection = self.client.get_or_create_collection(name="nodes_value")
         summary_collection = self.client.get_or_create_collection(name="nodes_summary")
         preconditions_collection = self.client.get_or_create_collection(name="nodes_preconditions")
         effects_collection = self.client.get_or_create_collection(name="nodes_effects")
 
         value_rows = value_collection.get(where={"id": node_id}, include=["documents", "metadatas"])
-        summary_rows = summary_collection.get(
-            where={"id": node_id}, include=["documents", "metadatas"]
-        )
-        precondition_rows = preconditions_collection.get(
-            where={"id": node_id}, include=["documents", "metadatas"]
-        )
-        effect_rows = effects_collection.get(
-            where={"id": node_id}, include=["documents", "metadatas"]
-        )
-
         value_docs = value_rows.get("documents") or []
         value_metas = value_rows.get("metadatas") or []
+
         if not value_docs:
-            return Context()
+            return None
 
         base_metadata = value_metas[0] if value_metas and isinstance(value_metas[0], dict) else {}
 
+        summary_rows = summary_collection.get(
+            where={"id": node_id}, include=["documents", "metadatas"]
+        )
+        summary_docs = [d for d in (summary_rows.get("documents") or []) if isinstance(d, str) and d.strip()]
+        summary_text = summary_docs[0] if summary_docs else base_metadata.get("tool_summary")
+
+        precondition_rows = preconditions_collection.get(
+            where={"id": node_id}, include=["documents", "metadatas"]
+        )
         precondition_docs = [
             d for d in (precondition_rows.get("documents") or []) if isinstance(d, str)
         ]
-        effect_docs = [d for d in (effect_rows.get("documents") or []) if isinstance(d, str)]
 
-        summary_docs = [d for d in (summary_rows.get("documents") or []) if isinstance(d, str) and d.strip()]
-        summary_text = summary_docs[0] if summary_docs else base_metadata.get("tool_summary")
+        effect_rows = effects_collection.get(
+            where={"id": node_id}, include=["documents", "metadatas"]
+        )
+        effect_docs = [d for d in (effect_rows.get("documents") or []) if isinstance(d, str)]
 
         node_dict: Dict[str, Any] = {
             "id": base_metadata.get("id") or node_id,
@@ -96,8 +98,42 @@ class ChromadbAdapter(Memory):
             "previous": base_metadata.get("previous"),
             "children": [],
         }
+        return node_dict
 
-        return context_from_dict(node_dict)
+    def _build_context_from_node_id(self, node_id: str) -> Context:
+        """Rebuild subtree starting from the queried node as root."""
+        # Recursively build the tree starting from the queried node
+        def build_node_tree(nid: str) -> Dict[str, Any] | None:
+            node_dict = self._build_node_dict_from_metadata(nid)
+            if not node_dict:
+                return None
+
+            # Find all children of this node by querying for nodes where parent_id == nid
+            value_collection = self.client.get_or_create_collection(name="nodes_value")
+            children_rows = value_collection.get(
+                where={"parent_id": nid},
+                include=["metadatas"]
+            )
+            children_metas = children_rows.get("metadatas") or []
+            
+            # Recursively build each child
+            children = []
+            for child_meta in children_metas:
+                if isinstance(child_meta, dict):
+                    child_id = child_meta.get("id")
+                    if child_id:
+                        child_tree = build_node_tree(child_id)
+                        if child_tree:
+                            children.append(child_tree)
+            
+            node_dict["children"] = children
+            return node_dict
+
+        root_dict = build_node_tree(node_id)
+        if not root_dict:
+            return Context()
+
+        return context_from_dict(root_dict)
 
     def save(self, context: Context):
         nodes_value = self.client.get_or_create_collection(name="nodes_value")
