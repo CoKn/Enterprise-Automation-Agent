@@ -23,13 +23,16 @@ async def plan(agent_session: Agent):
 
     # retrieve plan or context (episodic memory) or semantic memory or None
     # check for old plans
-    # existing_plan = agent_session.memory.query(goal=agent_session.active_node.value)
-    existing_plan = None
+    filter = {"collection": "nodes_value"}
+    existing_plan = agent_session.memory.query(agent_session.active_node.value, filter=filter)
     if existing_plan:
         agent_session.context = existing_plan
         agent_session.global_goal_node = existing_plan.get_root()
         agent_session.active_node = existing_plan.next_node(agent_session.global_goal_node)
-        logger.info("Reusing cached plan for goal '%s'", agent_session.active_node.value)
+        if agent_session.active_node:
+            logger.info("Reusing cached plan for goal '%s'", agent_session.active_node.value)
+        else:
+            logger.info("Reusing cached plan for goal root '%s'", agent_session.global_goal_node.value)
 
         logger.info("Plan '%s'", agent_session.context)
         return

@@ -13,7 +13,7 @@ from agent.adapter.outbound.planner_json_serializer import ContextJsonSerializer
 from agent.adapter.outbound.jinja_template_renderer import JinjaTemplateRenderer
 from agent.domain.planner import Planner
 from agent.application.ports.outbound.memory_interface import Memory
-from agent.adapter.outbound.postgres_adapter import PostgresAdapter
+from agent.adapter.outbound.chromadb_adapter import ChromadbAdapter
 from agent.application.ports.outbound.template_renderer_interface import TemplateRenderer
 
 load_dotenv()
@@ -92,9 +92,7 @@ def build_container(base_dir: Path) -> AppContainer:
     )
 
     memory_db_path = os.getenv("EPISODIC_MEMORY_DB", str(db_dir / "episodic_memory.sqlite3"))
-    
-    # memory = NullMemory()
-    memory = PostgresAdapter()
+    memory = ChromadbAdapter(os.getenv("CHROMADB"))
 
     context_serializer = ContextJsonSerializer()
     planner = Planner(llm=llm, serializer=context_serializer)

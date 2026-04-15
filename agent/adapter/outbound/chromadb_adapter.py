@@ -1,0 +1,292 @@
+
+import json
+import os
+from typing import Any, Dict, Optional
+
+import chromadb
+from chromadb.config import Settings
+
+from agent.adapter.serialization.context import context_to_dict, flatten_nodes
+from agent.adapter.deserialization.context import context_from_dict
+from agent.application.ports.outbound.memory_interface import Memory
+from agent.domain.context import Context
+
+
+class ChromadbAdapter(Memory):
+    client: None
+    _COLLECTIONS = {
+        "nodes_value",
+        "nodes_summary",
+        "nodes_preconditions",
+        "nodes_effects",
+    }
+
+    def __init__(
+        self,
+        path: str,
+        client_settings: Optional[Settings] = Settings(anonymized_telemetry=False),
+    ):
+        super().__init__()
+        resolved_path = os.getenv("CHROMADB") or path or "data"
+        self.client = chromadb.PersistentClient(path=resolved_path, settings=client_settings)
+
+    def _materialized_path(self, node_id: str, parent_lookup: Dict[str, Optional[str]]) -> str:
+        lineage: list[str] = []
+        current: Optional[str] = node_id
+        visited: set[str] = set()
+
+        while current and current not in visited:
+            lineage.append(current)
+            visited.add(current)
+            current = parent_lookup.get(current)
+
+        lineage.reverse()
+        return "/".join(lineage)
+
+    def _resolve_collection_name(self, filter: dict | None) -> str | None:
+        if not filter:
+            return "nodes_value"
+        candidate = filter.get("collection") or filter.get("search_by") or "nodes_value"
+        candidate = str(candidate).strip()
+        return candidate if candidate in self._COLLECTIONS else None
+
+    def _build_context_from_node_id(self, node_id: str) -> Context:
+        value_collection = self.client.get_or_create_collection(name="nodes_value")
+        summary_collection = self.client.get_or_create_collection(name="nodes_summary")
+        preconditions_collection = self.client.get_or_create_collection(name="nodes_preconditions")
+        effects_collection = self.client.get_or_create_collection(name="nodes_effects")
+
+        value_rows = value_collection.get(where={"id": node_id}, include=["documents", "metadatas"])
+        summary_rows = summary_collection.get(
+            where={"id": node_id}, include=["documents", "metadatas"]
+        )
+        precondition_rows = preconditions_collection.get(
+            where={"id": node_id}, include=["documents", "metadatas"]
+        )
+        effect_rows = effects_collection.get(
+            where={"id": node_id}, include=["documents", "metadatas"]
+        )
+
+        value_docs = value_rows.get("documents") or []
+        value_metas = value_rows.get("metadatas") or []
+        if not value_docs:
+            return Context()
+
+        base_metadata = value_metas[0] if value_metas and isinstance(value_metas[0], dict) else {}
+
+        precondition_docs = [
+            d for d in (precondition_rows.get("documents") or []) if isinstance(d, str)
+        ]
+        effect_docs = [d for d in (effect_rows.get("documents") or []) if isinstance(d, str)]
+
+        summary_docs = [d for d in (summary_rows.get("documents") or []) if isinstance(d, str) and d.strip()]
+        summary_text = summary_docs[0] if summary_docs else base_metadata.get("tool_summary")
+
+        node_dict: Dict[str, Any] = {
+            "id": base_metadata.get("id") or node_id,
+            "value": value_docs[0],
+            "status": base_metadata.get("status") or "pending",
+            "type": base_metadata.get("type") or "abstract",
+            "created_at": base_metadata.get("created_at"),
+            "tool_name": base_metadata.get("tool_name"),
+            "tool_response_summary": summary_text,
+            "preconditions": precondition_docs,
+            "effects": effect_docs,
+            "next": base_metadata.get("next"),
+            "previous": base_metadata.get("previous"),
+            "children": [],
+        }
+
+        return context_from_dict(node_dict)
+
+    def save(self, context: Context):
+        nodes_value = self.client.get_or_create_collection(name="nodes_value")
+        nodes_summary = self.client.get_or_create_collection(name="nodes_summary")
+        nodes_preconditions = self.client.get_or_create_collection(name="nodes_preconditions")
+        nodes_effects = self.client.get_or_create_collection(name="nodes_effects")
+
+        if not (serialized_context := context_to_dict(context=context)):
+            return {
+                "nodes_value": 0,
+                "nodes_summary": 0,
+                "nodes_preconditions": 0,
+                "nodes_effects": 0,
+            }
+
+        flat_nodes = list(flatten_nodes(serialized_context))
+
+        parent_lookup: Dict[str, Optional[str]] = {}
+        for node in flat_nodes:
+            node_id = node.get("id")
+            if node_id:
+                parent_lookup[node_id] = node.get("parent_id") or None
+
+        value_documents: list[str] = []
+        value_metadatas: list[Dict[str, Any]] = []
+        value_ids: list[str] = []
+
+        summary_documents: list[str] = []
+        summary_metadatas: list[Dict[str, Any]] = []
+        summary_ids: list[str] = []
+
+        precondition_documents: list[str] = []
+        precondition_metadatas: list[Dict[str, Any]] = []
+        precondition_ids: list[str] = []
+
+        effect_documents: list[str] = []
+        effect_metadatas: list[Dict[str, Any]] = []
+        effect_ids: list[str] = []
+
+        for node in flat_nodes:
+            node_id = node.get("id")
+            if not node_id:
+                continue
+
+            parent_id = node.get("parent_id") or None
+            descendant_of = self._materialized_path(node_id=node_id, parent_lookup=parent_lookup)
+
+            tool_response = node.get("tool_response") or {}
+            tool_args_raw = node.get("tool_args")
+            tool_args_json = (
+                json.dumps(tool_args_raw, default=str) if tool_args_raw is not None else None
+            )
+
+            base_metadata: Dict[str, Any] = {
+                "id": node_id,
+                "tool_name": node.get("tool_name") or None,
+                "tool_summary": node.get("tool_response_summary") or None,
+                "tool_response_text": (
+                    tool_response.get("text") if isinstance(tool_response, dict) else str(tool_response)
+                ),
+                "tool_response_structured": (
+                    json.dumps(tool_response.get("structured"), default=str)
+                    if isinstance(tool_response, dict) and tool_response.get("structured") is not None
+                    else None
+                ),
+                "tool_args": tool_args_json,
+                "type": node.get("type"),
+                "status": node.get("status"),
+                "created_at": node.get("created_at"),
+                "next": node.get("next") or None,
+                "previous": node.get("previous") or None,
+                "parent_id": parent_id,
+                "descendant_of": descendant_of,
+            }
+
+            goal_text = node.get("value")
+            if isinstance(goal_text, str) and goal_text.strip():
+                value_documents.append(goal_text)
+                value_ids.append(node_id)
+                value_metadatas.append({**base_metadata, "kind": "goal"})
+
+            summary_text = node.get("tool_response_summary")
+            if isinstance(summary_text, str) and summary_text.strip():
+                summary_documents.append(summary_text)
+                summary_ids.append(f"{node_id}:summary")
+                summary_metadatas.append({**base_metadata, "kind": "summary"})
+
+            for idx, precondition in enumerate(node.get("preconditions") or []):
+                if not isinstance(precondition, str) or not precondition.strip():
+                    continue
+                precondition_documents.append(precondition)
+                precondition_ids.append(f"{node_id}:precondition:{idx}")
+                precondition_metadatas.append(
+                    {
+                        **base_metadata,
+                        "kind": "precondition",
+                        "position": idx,
+                    }
+                )
+
+            for idx, effect in enumerate(node.get("effects") or []):
+                if not isinstance(effect, str) or not effect.strip():
+                    continue
+                effect_documents.append(effect)
+                effect_ids.append(f"{node_id}:effect:{idx}")
+                effect_metadatas.append(
+                    {
+                        **base_metadata,
+                        "kind": "effect",
+                        "position": idx,
+                    }
+                )
+
+        if value_documents:
+            nodes_value.upsert(documents=value_documents, ids=value_ids, metadatas=value_metadatas)
+
+        if summary_documents:
+            nodes_summary.upsert(
+                documents=summary_documents,
+                ids=summary_ids,
+                metadatas=summary_metadatas,
+            )
+
+        if precondition_documents:
+            nodes_preconditions.upsert(
+                documents=precondition_documents,
+                ids=precondition_ids,
+                metadatas=precondition_metadatas,
+            )
+
+        if effect_documents:
+            nodes_effects.upsert(
+                documents=effect_documents,
+                ids=effect_ids,
+                metadatas=effect_metadatas,
+            )
+
+        return {
+            "nodes_value": len(value_documents),
+            "nodes_summary": len(summary_documents),
+            "nodes_preconditions": len(precondition_documents),
+            "nodes_effects": len(effect_documents),
+        }
+    
+
+
+    def query(self, value: str, filter: dict | None = None) -> Context | None:
+        if not value or not value.strip():
+            return None
+
+        collection_name = self._resolve_collection_name(filter)
+        if not collection_name:
+            return None
+
+        n_results = 1
+        where: Dict[str, Any] | None = None
+        include: list[str] = ["documents", "metadatas", "distances"]
+
+        if filter:
+            raw_n_results = filter.get("n_results")
+            if isinstance(raw_n_results, int) and raw_n_results > 0:
+                n_results = raw_n_results
+            raw_where = filter.get("where")
+            if isinstance(raw_where, dict):
+                where = raw_where
+
+        collection = self.client.get_or_create_collection(name=collection_name)
+        result = collection.query(
+            query_texts=[value],
+            n_results=n_results,
+            where=where,
+            include=include,
+        )
+
+        ids_rows = result.get("ids") or []
+        metas_rows = result.get("metadatas") or []
+        ids = ids_rows[0] if ids_rows and isinstance(ids_rows[0], list) else []
+        metas = metas_rows[0] if metas_rows and isinstance(metas_rows[0], list) else []
+
+        node_id: str | None = None
+        if metas and isinstance(metas[0], dict):
+            metadata_id = metas[0].get("id")
+            if metadata_id:
+                node_id = str(metadata_id)
+
+        if not node_id and ids:
+            node_id = str(ids[0]).split(":")[0]
+
+        if not node_id:
+            return None
+
+        return self._build_context_from_node_id(node_id)

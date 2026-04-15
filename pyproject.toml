@@ -16,11 +16,12 @@ dependencies = [
     "neo4j>=6.1.0",
     "openai>=2.30.0",
     "pandas>=3.0.2",
-    "pgvector>=0.4.2",
     "playwright>=1.58.0",
+    "plotly>=6.7.0",
     "psycopg>=3.3.3",
     "psycopg2>=2.9.11",
     "pydantic-graph>=1.70.0",
     "sqlite-vec>=0.1.9",
+    "streamlit>=1.45.1",
     "uuid>=1.30",
 ]
