@@ -196,7 +196,7 @@ class MCPAdapter(Tools):
 
             async def _callback_handler() -> tuple[str, str | None]:
                 # waits until your /mcp/oauth/callback endpoint enqueues (code,state)
-                code, state = await wait_for_oauth_callback(timeout=300.0)
+                code, state = await wait_for_oauth_callback(timeout=600.0)
                 return code, state
 
             oauth = OAuthClientProvider(
