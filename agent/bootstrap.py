@@ -91,7 +91,6 @@ def build_container(base_dir: Path) -> AppContainer:
         token_storage=token_storage,
     )
 
-    memory_db_path = os.getenv("EPISODIC_MEMORY_DB", str(db_dir / "episodic_memory.sqlite3"))
     memory = ChromadbAdapter(os.getenv("CHROMADB"))
 
     context_serializer = ContextJsonSerializer()
