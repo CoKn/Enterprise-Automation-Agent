@@ -5,6 +5,7 @@ from agent.logger import get_logger
 
 from agent.domain.context import Node, Context
 from agent.domain.prompts.planner.planning_prompt import PLANNING_PROMPT
+from agent.domain.prompts.planner.replanning_prompt import REPLANNING_PROMPT
 
 from agent.application.ports.outbound.llm_interface import LLM
 from agent.application.ports.outbound.context_serializer_interface import ContextSerializer
@@ -69,3 +70,47 @@ class Planner:
         return context_result
 
 
+    def replan(self, root: Node, context: Context, tool_docs: str = ""):
+        # 1. load replanning prompt and format with available tools
+        system_prompt = REPLANNING_PROMPT.format(tool_docs=tool_docs)
+
+        # 2. serialize failed root and full context
+        root_payload = self.serializer.serialize_node(root)
+        context_payload = self.serializer.serialize_context(context)
+
+        user_payload = {
+            "goal": root.value,
+            "failed_node": root_payload,
+            "context": context_payload,
+        }
+
+        logger.info(
+            "Replan userpayload: goal='%(goal)s' failed_node=%(failed_node)s context=%(context)s",
+            user_payload,
+        )
+
+        # 3. send prompt to LLM
+        result: str = self.llm.call(
+            prompt=json.dumps(user_payload),
+            system_prompt=system_prompt,
+            json_mode=True,
+        )
+
+        logger.info(
+            "Replan response: resp='%s'",
+            result,
+        )
+
+        try:
+            # 4. parse response
+            replanned = json.loads(result)
+
+            # 5. deserialization -> turn into Context data structure
+            context_result = self.serializer.deserialize_context(replanned)
+            if context_result is None:
+                raise ValueError("Replanner produced an empty context")
+
+        except json.JSONDecodeError:
+            raise ValueError(f"Planner LLM did not return valid JSON for replan: {result}")
+
+        return context_result

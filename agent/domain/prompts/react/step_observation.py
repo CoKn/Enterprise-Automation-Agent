@@ -61,7 +61,7 @@ Based on the context above, write an observation that:
 2. Explains how the current node contributes to the global goal.
 3. Describes how this step changes or informs the remaining plan (next nodes).
 4. Highlights any important new information, decisions, risks, or follow-up actions.
-5. Answer the question of the goal of the current node. Give the explicet values that are being asked.
+5. Answers the goal of the current node with explicit values.
 
 Follow these guidelines:
 - Only use information provided in the inputs; do not invent tools, data, or results.
@@ -72,21 +72,28 @@ Follow these guidelines:
 OUTPUT FORMAT
 ====================
 
-Return your answer as plain text using the following structure:
+Return ONLY valid JSON as a dictionary with exactly these two properties:
 
-Summary of Current Tool
-- ...
+{
+	"has_error": boolean,
+	"summary": string
+}
 
-Relation to Global Goal
-- ...
+Rules for `has_error`:
+- Set to true when the current tool response indicates an error or failure.
+- Set to false otherwise.
 
-Impact on Plan / Next Nodes
-- ...
+Rules for `summary`:
+- Use plain text.
+- Include these sections in order:
+	1. Summary of Current Tool
+	2. Relation to Global Goal
+	3. Impact on Plan / Next Nodes
+	4. Key Insights and Follow-ups
+	5. Answered Current Goal
+- In "Answered Current Goal", provide explicit values requested by the current node goal.
+- If explicit values are missing, clearly state what is missing.
 
-Key Insights and Follow-ups
-- ...
-
-Answered Question / Goal of the current node. Give the explicet values that are being asked.
-...
+Do not return markdown code fences.
 
 """

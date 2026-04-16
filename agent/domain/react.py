@@ -24,7 +24,8 @@ async def plan(agent_session: Agent):
     # retrieve plan or context (episodic memory) or semantic memory or None
     # check for old plans
     filter = {"collection": "nodes_value"}
-    existing_plan = agent_session.memory.query(agent_session.active_node.value, filter=filter)
+    # existing_plan = agent_session.memory.query(agent_session.active_node.value, filter=filter)
+    existing_plan = None
     if existing_plan:
         agent_session.context = existing_plan
         agent_session.global_goal_node = existing_plan.get_root()
@@ -36,6 +37,16 @@ async def plan(agent_session: Agent):
 
         logger.info("Plan '%s'", agent_session.context)
         return
+    
+    # case of failed execution, replan
+    if agent_session.active_node.status == NodeStatus.failed and agent_session.active_node.type == NodeType.fully_planned:
+        tool_docs = await agent_session.tools.get_tools_json()
+
+        agent_session.context = agent_session.planner.replan(
+            context=agent_session.context,
+            root=agent_session.active_node,
+            tool_docs=tool_docs
+        )
 
     # If the current node is still abstract, ask the planner to expand it
     if agent_session.active_node.node_type == NodeType.abstract:
@@ -159,7 +170,7 @@ async def act(agent_session: Agent):
     
     tool_args = agent_session.active_node.tool_args or {}
 
-    logger.info(
+    logger.debug(
         "Executing tool %s with args=%s on node=%s",
         tool_name,
         tool_args,
@@ -177,6 +188,7 @@ async def act(agent_session: Agent):
             agent_session.active_node.id,
             agent_session.active_node.tool_response,
         )
+
         return
     
     except Exception as e:
@@ -195,15 +207,6 @@ async def observe(agent_session: Agent):
 
     if not agent_session.active_node:
         return
-
-    # mark active node as complete
-    agent_session.active_node.node_status = NodeStatus.success
-
-    # bubble up completion to parents
-    agent_session.context.recompute_statuses()
-
-    # update node status in db 
-    agent_session.memory.save(context=agent_session.context)
 
     # build context for tool response summary
     global_goal = str(agent_session.global_goal_node)
@@ -226,20 +229,49 @@ async def observe(agent_session: Agent):
         },
     )
 
-    agent_session.active_node.tool_response_summary = agent_session.llm.call(prompt=step_observation_prompt_rendered)
+    try:
+        response = json.loads(agent_session.llm.call(prompt=step_observation_prompt_rendered))
+        agent_session.active_node.tool_response_summary = response.get("summary")
 
-    metadata = agent_session.memory.save(context=agent_session.context)
-    logger.debug("Persisted context metadata: %s", metadata)
-    logger.info(
-        "Observation summary node=%s: %s",
-        agent_session.active_node.id,
-        agent_session.active_node.tool_response_summary,
-    )
+        if response.get("has_error"):
+            agent_session.active_node.status = NodeStatus.failed
+        else:
+            agent_session.active_node.status = NodeStatus.success
 
 
-    # set next active node if a next node exists
-    if (next_node := agent_session.context.next_node(agent_session.active_node)):
-        agent_session.active_node = next_node
+         # bubble up completion to parents
+        agent_session.context.recompute_statuses()
+
+        # update node status in db 
+        agent_session.memory.save(context=agent_session.context)
+
+        metadata = agent_session.memory.save(context=agent_session.context)
+        logger.debug("Persisted context metadata: %s", metadata)
+        logger.info(
+            "Observation summary node=%s: %s",
+            agent_session.active_node.id,
+            agent_session.active_node.tool_response_summary,
+        )
+
+
+        # stay at failed node for replanning
+        if agent_session.active_node.status == NodeStatus.failed:
+            return
+        
+        # set next active node if a next node exists
+        if (next_node := agent_session.context.next_node(agent_session.active_node)):
+            agent_session.active_node = next_node
+
+    except Exception as e:
+        agent_session.active_node.node_status = NodeStatus.failed
+
+        # bubble up failure status to parents
+        agent_session.context.recompute_statuses()
+
+        # update node status in db 
+        agent_session.memory.save(context=agent_session.context)
+
+        raise RuntimeError(f"Observation has failed: {e}") from e
 
 
 

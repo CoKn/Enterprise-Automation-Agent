@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum, auto
-from typing import Optional, Self, Dict, Set
+from typing import Optional, Self, Dict, Set, Any
 from uuid import UUID, uuid4
 
 
@@ -41,7 +41,7 @@ class Node:
 
     # tool outcome
     tool_response: Optional[str] = None
-    tool_response_summary: Optional[str] = None
+    tool_response_summary: Optional[Dict[str, Any] | str] = None
 
     # data structure pointer
     parent: Optional[Self] = None
