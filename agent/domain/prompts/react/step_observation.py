@@ -77,6 +77,13 @@ The current node may contain:
 - preconditions
 - effects
 
+
+Current Tool Response (explicit)
+--------------------------------
+{{ current_tool_response }}
+
+Use this section as the primary source for extracting concrete values.
+
 ====================
 YOUR TASK
 ====================
@@ -102,6 +109,7 @@ CRITICAL EXTRACTION RULES
 - If you say a value was found, you MUST return the exact value in "parameter_updates".
 - Do NOT say "retrieved" or "known" for a tracked parameter unless you also provide the exact concrete value.
 - Prefer exact strings from the tool response over inferred descriptions.
+- Prefer values from the explicit "Current Tool Response" section whenever available.
 - If multiple candidate values appear, explain the ambiguity and do not choose unless the evidence clearly supports one.
 - A parameter should only be updated when the value is supported by the current tool response.
 - If the current tool response is an error, still extract any useful values if they are explicitly present.

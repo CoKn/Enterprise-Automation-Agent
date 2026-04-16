@@ -39,11 +39,12 @@ async def plan(agent_session: Agent):
     
     # case of failed execution, replan
     if agent_session.active_node.status == NodeStatus.failed and agent_session.active_node.type == NodeType.fully_planned:
+        failed_node = agent_session.active_node
         tool_docs = await agent_session.tools.get_tools_json()
 
         agent_session.context = agent_session.planner.replan(
             context=agent_session.context,
-            root=agent_session.active_node,
+            root=failed_node,
             tool_docs=tool_docs
         )
 
@@ -52,7 +53,15 @@ async def plan(agent_session: Agent):
             raise RuntimeError("No root available after replanning")
 
         agent_session.global_goal_node = new_root
-        agent_session.active_node = agent_session.context.next_node(new_root) or None
+
+        # Continue from the repaired failed-node subtree, not from the global root.
+        next_after_repair = agent_session.context.next_node(failed_node)
+        if next_after_repair is not None:
+            agent_session.active_node = next_after_repair
+        elif failed_node.node_type != NodeType.abstract:
+            agent_session.active_node = failed_node
+        else:
+            agent_session.active_node = None
 
         if agent_session.active_node:
             logger.info(

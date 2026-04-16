@@ -1,5 +1,6 @@
 # planner for generating new planns
 import json
+from uuid import uuid4
 
 from agent.logger import get_logger
 
@@ -106,37 +107,52 @@ class Planner:
             # 4. parse response
             replanned = json.loads(result)
 
-            # 5. deserialization -> turn into Context data structure
-            replanned_context = self.serializer.deserialize_context(replanned)
-            if replanned_context is None:
-                raise ValueError("Replanner produced an empty context")
+            insertion_payload = None
+            if isinstance(replanned, dict):
+                if isinstance(replanned.get("node"), dict):
+                    insertion_payload = replanned.get("node")
+                elif isinstance(replanned.get("root"), dict):
+                    # Backward compatibility for older prompt outputs.
+                    insertion_payload = replanned.get("root")
 
-            replanned_root = replanned_context.get_root()
-            if replanned_root is None:
-                raise ValueError("Replanner produced an empty root")
+            if not isinstance(insertion_payload, dict):
+                raise ValueError("Replanner output must include a single node under key 'node'")
 
-            existing_node = context.get_node(root.id) or root
+            insertion_node = self.serializer.deserialize_node(insertion_payload)
+            insertion_node.id = insertion_node.id or uuid4()
+            insertion_node.node_status = NodeStatus.pending
+            insertion_node.tool_response = None
+            insertion_node.tool_response_summary = None
 
-            # Repair only the failed node/subtree in place so unrelated branches survive.
-            existing_node.value = replanned_root.value
-            existing_node.node_status = NodeStatus.pending
-            existing_node.node_type = replanned_root.node_type
-            existing_node.preconditions = replanned_root.preconditions
-            existing_node.effects = replanned_root.effects
-            existing_node.tool_name = replanned_root.tool_name
-            existing_node.tool_args = replanned_root.tool_args
-            existing_node.tool_response = None
-            existing_node.tool_response_summary = None
-            existing_node.next = replanned_root.next
-            existing_node.previous = replanned_root.previous
-            existing_node.children = replanned_root.children
+            failed_node = context.get_node(root.id) or root
+            parent = failed_node.parent
 
-            for child in existing_node.children:
-                child.parent = existing_node
+            if parent is not None:
+                siblings = parent.children
+                idx = next((i for i, n in enumerate(siblings) if n.id == failed_node.id), -1)
+                old_next = siblings[idx + 1] if idx >= 0 and idx + 1 < len(siblings) else None
 
-            # Preserve the original identity of the repaired node.
-            existing_node.id = root.id
-            existing_node.parent = root.parent
+                insertion_node.parent = parent
+                if idx >= 0:
+                    siblings.insert(idx + 1, insertion_node)
+                else:
+                    siblings.append(insertion_node)
+            else:
+                roots = context.roots
+                idx = next((i for i, n in enumerate(roots) if n.id == failed_node.id), -1)
+                old_next = roots[idx + 1] if idx >= 0 and idx + 1 < len(roots) else None
+
+                insertion_node.parent = None
+                if idx >= 0:
+                    roots.insert(idx + 1, insertion_node)
+                else:
+                    roots.append(insertion_node)
+
+            insertion_node.previous = failed_node.id
+            insertion_node.next = old_next.id if old_next is not None else None
+            failed_node.next = insertion_node.id
+            if old_next is not None:
+                old_next.previous = insertion_node.id
 
             context.rebuild_indexes()
 

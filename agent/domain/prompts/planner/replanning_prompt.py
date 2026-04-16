@@ -44,20 +44,12 @@ For JSON output:
 
 REPLANNING STRATEGY:
 - Analyze the failed_node.tool_response to understand why execution failed.
-- Preserve the intent of the failed goal, but change the action sequence to avoid repeating the same failure.
-- If the failure is caused by invalid parameters, produce corrected parameters for the first actionable node.
-- If prerequisites are missing, add prerequisite retrieval/validation steps before retrying the original intent.
-- If a tool is unsuitable for the observed failure, choose a better tool from Available Tools.
-- Repair only the failed node or its direct replacement subtree.
-- Do not regenerate unrelated siblings, ancestors, or the entire original context.
-- Preserve any surrounding plan structure that is not directly affected by the failure.
-
-Single-layer planning constraint:
-- Generate exactly ONE layer of direct children under the returned root.
-- Among actionable direct children:
-	- Exactly one (the first in document order) must be "fully_planned" with non-null tool_args.
-	- All remaining actionable children must be "parcially_planned" with tool_args = null.
-- Abstract children are allowed and must have tool_name = null.
+- Preserve the intent of the failed goal, but change the immediate next action to avoid repeating the same failure.
+- Produce exactly ONE insertion node that will be inserted between the failed node and the node that originally followed it.
+- Do not regenerate the whole tree, siblings, ancestors, or a replacement subtree.
+- If the failure is caused by invalid parameters, return corrected parameters in this insertion node.
+- If prerequisites are missing, make the insertion node a prerequisite retrieval/validation step.
+- If failure details are ambiguous, make the insertion node a diagnostic/lookup step.
 
 Failure-awareness rules:
 - Explicitly avoid replaying the same failing call with unchanged parameters.
@@ -67,45 +59,32 @@ Failure-awareness rules:
 CRITICAL RESPONSE FORMAT:
 - Return ONLY valid JSON.
 - No prose, no markdown, no code fences.
-- Must be parseable JSON object with this shape:
+- Must be parseable JSON object with this exact top-level shape:
 
 {{
-	"root": {{
+	"node": {{
 		"id": null,
-		"value": "Replanned goal",
-		"type": "abstract",
-		"tool_name": null,
-		"tool_args": null,
+		"value": "Single insertion step",
+		"type": "fully_planned",
+		"tool_name": "exact.available.tool.name",
+		"tool_args": {{"example": "value"}},
 		"tool_response": null,
 		"tool_response_summary": null,
-		"preconditions": [],
-		"effects": [],
+		"preconditions": ["..."],
+		"effects": ["..."],
 		"parent": null,
 		"next": null,
 		"previous": null,
 		"status": "pending",
 		"created_at": null,
-		"children": [
-			{{
-				"id": null,
-				"value": "First corrected actionable or abstract step",
-				"type": "fully_planned",
-				"tool_name": "exact.available.tool.name",
-				"tool_args": {{"example": "value"}},
-				"tool_response": null,
-				"tool_response_summary": null,
-				"preconditions": ["..."],
-				"effects": ["..."],
-				"parent": null,
-				"next": null,
-				"previous": null,
-				"status": "pending",
-				"created_at": null,
-				"children": []
-			}}
-		]
+		"children": []
 	}}
 }}
+
+Output rules:
+- Return exactly one insertion node in `node`.
+- The insertion node should usually be `fully_planned` with concrete known arguments.
+- Do not return a root wrapper with siblings/children beyond this single node.
 
 Available Tools:
 {tool_docs}
