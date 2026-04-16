@@ -263,3 +263,46 @@ class Context:
                 target_node.tool_args = {}
 
             target_node.tool_args.update(tool_args_update)
+
+    def get_leaf_nodes(self) -> list[Node]:
+        # Return all leaf nodes (nodes without children) across all roots.
+        self.rebuild_indexes()
+
+        leaf_nodes: list[Node] = []
+        for root in self.roots:
+            for node in self._bfs_order(root):
+                if not node.children:
+                    leaf_nodes.append(node)
+
+        return leaf_nodes
+
+
+    def get_leaf_nodes_tool_args(self) -> list[dict[str, Any]]:
+        # Build tracked parameter entries for future (pending) leaf nodes.
+        # Each tracked item is node-level and uses the same structure expected
+        # by tool updates: tool_name + tool_args dictionary.
+        tracked_parameters: list[dict[str, Any]] = []
+
+        for node in self.get_leaf_nodes():
+            if node.node_status != NodeStatus.pending:
+                continue
+
+            if not node.tool_name:
+                continue
+
+            node_tool_args = node.tool_args if isinstance(node.tool_args, dict) else {}
+
+            tracked_parameters.append(
+                {
+                    "binding_key": f"{node.id}:{node.tool_name}",
+                    "target_node_id": str(node.id),
+                    "future_node_goal": node.value,
+                    "tool_name": node.tool_name,
+                    "tool_args": node_tool_args,
+                    "description": f"Tracked arguments for tool '{node.tool_name}'",
+                    "current_value": node_tool_args if node_tool_args else None,
+                }
+            )
+
+        return tracked_parameters
+        

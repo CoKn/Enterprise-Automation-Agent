@@ -25,6 +25,7 @@ async def observe(agent_session: Agent):
     previous_nodes = agent_session.context.represent_nodes(nodes=previous_nodes_list)
     next_nodes = agent_session.context.represent_nodes(nodes=next_nodes_list)
     current_node = agent_session.context.represent_nodes(nodes=[agent_session.active_node])
+    tracked_parameters = agent_session.context.get_leaf_nodes_tool_args()
 
     # format
     step_observation_prompt_rendered = render_prompt(
@@ -35,6 +36,7 @@ async def observe(agent_session: Agent):
             "previous_nodes": previous_nodes,
             "next_nodes": next_nodes,
             "current_node": current_node,
+            "tracked_parameters": tracked_parameters
         },
     )
 
