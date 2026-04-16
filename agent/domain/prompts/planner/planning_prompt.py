@@ -36,54 +36,60 @@ For JSON output:
 - Always include children as an array (empty list for leaves).
 - Always include preconditions and effects as arrays of strings.
 
-**PLANNING STRATEGY**: Create a mixed planning approach where **exactly one** executable action in the entire plan is completely planned (with parameters), while all other executable actions are only partially planned (tool name only). This allows for adaptive execution where later steps can be refined based on early results.
+**PLANNING STRATEGY**: Generate exactly ONE layer of children for the current goal. Each child can be either:
+- An abstract sub-goal that will be decomposed further in a subsequent planning cycle
+- A concrete action mapped to an available MCP tool
+
+Only the FIRST actionable leaf node (with a tool_name) should be completely planned (with parameters). All other actionable nodes should be partially planned (tool_name only, tool_args = null). This allows for adaptive execution where later steps can be refined based on early results.
 
 ## Decomposition Process:
 
-1. Analyze the Goal: Understand the user's high-level objective and its scope.
+1. Analyze the Goal: Understand the objective and determine if it needs decomposition or is actionable.
 
-2. Planning Levels using Node.type:
-   - Strategic / high-level planning nodes: type = "abstract".
-   - Tactical / mid-level planning nodes: type = "abstract".
-   - Operational / executable leaf nodes mapped to MCP tools:
-     - type = "fully_planned" for the single completely planned leaf.
-     - type = "parcially_planned" for all other executable leaves.
+2. Single-Level Decomposition:
+   - Generate exactly ONE layer of direct children for the given goal.
+   - For each child, determine if it should be:
+     * type = "abstract" (if further decomposition is needed in a future planning cycle)
+     * type = "fully_planned" (only for the FIRST actionable leaf in document order, with non-null tool_args)
+     * type = "parcially_planned" (for all other actionable leaves, with tool_name but tool_args = null)
 
 3. Decomposition Rules:
-   - Internal planning nodes (with children) MUST have type = "abstract" and tool_name = null, tool_args = null.
-   - Continue decomposing until you reach concrete actions that map to MCP tools (leaf nodes with an MCP tool).
-   - Ensure each concrete action maps to an available MCP tool.
-  - Tool name selection is STRICT:
+   - Abstract nodes (with children planned later) MUST have tool_name = null and tool_args = null.
+   - Actionable nodes (leaf nodes in this plan layer) MUST have a non-null tool_name mapped to an available MCP tool.
+   - Tool name selection is STRICT:
     * Use ONLY tool names listed in Available Tools.
     * Use the exact value of the "name" field from Available Tools.
     * Tool names are namespaced keys and typically look like "<server_id>.<mcp_name>".
     * Do NOT invent aliases or variants such as adding/removing suffixes like "_tool".
-   - Maintain logical dependencies between goals.
-   - Each goal should be measurable and have clear completion criteria expressed via preconditions and effects.
+   - Each goal should be measurable with clear completion criteria in preconditions and effects.
+   - Later planning cycles will decompose abstract nodes as needed.
 
-4. GLOBAL MCP Tool Planning Constraint (VERY IMPORTANT):
+4. Single-Layer MCP Tool Planning Constraint (VERY IMPORTANT):
 
-   For leaf nodes (nodes with no children) that use MCP tools, you MUST follow this global strategy across the ENTIRE tree:
+   For the DIRECT children of the current goal:
 
-   - Collect ALL leaf nodes in the plan in document order (top to bottom, left to right in the JSON structure).
-   - Let this ordered list be L = [leaf_1, leaf_2, leaf_3, ...].
+   - Collect ALL DIRECT children that are leaf nodes (with tool_name) in document order: L = [leaf_1, leaf_2, leaf_3, ...].
+   - Ignore abstract children (those that will be decomposed later).
 
    Then apply these rules:
 
-   - Exactly ONE fully planned leaf in the entire tree:
-     * Only leaf_1 (the first leaf node in L) is allowed to:
+   - Exactly ONE fully planned leaf among direct children:
+     * Only leaf_1 (the first actionable child) is allowed to:
        - have type = "fully_planned",
        - include both "tool_name" AND a non-null "tool_args" object (completely planned).
-   - All other leaf nodes must be partially planned:
-     * For EVERY other leaf node (leaf_2, leaf_3, ...), you MUST:
+   - All other actionable direct children must be partially planned:
+     * For EVERY other actionable child (leaf_2, leaf_3, ...), you MUST:
        - set type = "parcially_planned",
        - include a non-null "tool_name" (the tool name), and
        - set "tool_args": null.
 
-   This rule is GLOBAL, not per subtree:
-   - Do NOT reset this rule for each sub-goal or subtree.
-   - There must be exactly one leaf node with type = "fully_planned" and non-null "tool_args" in the entire plan.
-   - All other leaf nodes must have type = "parcially_planned" and "tool_args": null.
+   - Abstract children (type = "abstract") have no tool_name and will be planned in subsequent cycles.
+
+   This rule applies only to the current single layer of children:
+   - Do NOT plan deeper levels; focus only on direct children.
+   - Exactly one direct actionable child has type = "fully_planned" with non-null "tool_args".
+   - All other actionable direct children have type = "parcially_planned" with "tool_args": null.
+   - Abstract children will be recursively decomposed when their turn comes.
 
 5. Preconditions & Effects for Leaf Nodes:
    - For every leaf node (no children) that has a tool_name, you MUST include:
@@ -102,7 +108,7 @@ Return exactly this JSON structure (all nodes must respect the Node fields above
 {{
   "root": {{
     "id": null,
-    "value": "Main objective description",
+    "value": "Goal to be decomposed",
     "type": "abstract",
     "tool_name": null,
     "tool_args": null,
@@ -118,65 +124,47 @@ Return exactly this JSON structure (all nodes must respect the Node fields above
     "children": [
       {{
         "id": null,
-        "value": "Sub-goal description",
-        "type": "abstract",
-        "tool_name": null,
-        "tool_args": null,
+        "value": "First direct sub-goal or action (completely planned if actionable)",
+        "type": "fully_planned",
+        "tool_name": "tool_name_for_first_action",
+        "tool_args": {{"param": "value"}},
         "tool_response": null,
         "tool_response_summary": null,
-        "preconditions": [],
-        "effects": [],
+        "preconditions": [
+          "Precondition 1",
+          "Precondition 2"
+        ],
+        "effects": [
+          "Effect 1",
+          "Effect 2"
+        ],
         "parent": null,
         "next": null,
         "previous": null,
         "status": "pending",
         "created_at": null,
-        "children": [
-          {{
-            "id": null,
-            "value": "First concrete action (completely planned)",
-            "type": "fully_planned",
-            "tool_name": "tool_name",
-            "tool_args": {{"param": "value"}},
-            "tool_response": null,
-            "tool_response_summary": null,
-            "preconditions": [
-              "Precondition 1",
-              "Precondition 2"
-            ],
-            "effects": [
-              "Effect 1",
-              "Effect 2"
-            ],
-            "parent": null,
-            "next": null,
-            "previous": null,
-            "status": "pending",
-            "created_at": null,
-            "children": []
-          }},
-          {{
-            "id": null,
-            "value": "Second concrete action (partially planned)",
-            "type": "parcially_planned",
-            "tool_name": "another_tool_name",
-            "tool_args": null,
-            "tool_response": null,
-            "tool_response_summary": null,
-            "preconditions": [
-              "Precondition A"
-            ],
-            "effects": [
-              "Effect A"
-            ],
-            "parent": null,
-            "next": null,
-            "previous": null,
-            "status": "pending",
-            "created_at": null,
-            "children": []
-          }}
-        ]
+        "children": []
+      }},
+      {{
+        "id": null,
+        "value": "Second direct sub-goal (abstract for later decomposition or partially planned action)",
+        "type": "parcially_planned",
+        "tool_name": "tool_name_for_second_action",
+        "tool_args": null,
+        "tool_response": null,
+        "tool_response_summary": null,
+        "preconditions": [
+          "Precondition A"
+        ],
+        "effects": [
+          "Effect A"
+        ],
+        "parent": null,
+        "next": null,
+        "previous": null,
+        "status": "pending",
+        "created_at": null,
+        "children": []
       }}
     ]
   }}
@@ -188,15 +176,17 @@ Return exactly this JSON structure (all nodes must respect the Node fields above
 - No markdown code blocks.
 - All strings must be properly quoted.
 - All enum values must be one of the allowed strings for NodeType and NodeStatus.
-- MANDATORY (GLOBAL LEAF CONSTRAINT):
-  * Consider ALL leaf nodes in the entire tree in document order.
-  * Exactly ONE leaf node (the first in document order) must have type = "fully_planned" with non-null tool_args (completely planned).
-  * ALL other leaf nodes must:
-    - Have a non-null tool_name field,
-    - Have type = "parcially_planned",
-    - Have "tool_args": null (partially planned).
-  * ALL leaf nodes (including the first) must include "preconditions" (array, 1-5 items) and "effects" (array, 1-5 items).
-- Leaf nodes are processed in document order (top to bottom, left to right in the tree).
+- SINGLE-LAYER PLANNING (MANDATORY):
+  * Generate exactly ONE layer of direct children for the goal.
+  * Do NOT plan deeper layers; those will be handled in subsequent planning cycles.
+  * Each direct child is either abstract (for later decomposition) or actionable (with a tool_name).
+- SINGLE-LAYER ACTION PLANNING CONSTRAINT:
+  * Among DIRECT children that are actionable (have tool_name):
+    - Exactly ONE actionable child (the first in document order) must have type = "fully_planned" with non-null tool_args.
+    - ALL other actionable direct children must have type = "parcially_planned" with tool_args = null.
+  * Abstract children (type = "abstract") have tool_name = null and will be decomposed when needed.
+- ALL actionable leaf nodes MUST include "preconditions" (array, 1-5 items) and "effects" (array, 1-5 items).
+- Actionable children are processed in document order (top to bottom).
 - Tool names MUST be exact strings taken from Available Tools "name" values only.
 
 Available Tools:
