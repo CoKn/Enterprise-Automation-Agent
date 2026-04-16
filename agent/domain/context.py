@@ -37,7 +37,7 @@ class Node:
 
     # tool invocation
     tool_name: Optional[str] = None
-    tool_args: Optional[list] = None
+    tool_args: Optional[Dict[str, Any]] = None
 
     # tool outcome
     tool_response: Optional[str] = None
@@ -240,3 +240,26 @@ class Context:
         self.rebuild_indexes()
         roots = ", ".join(str(root.id) for root in self.roots)
         return f"Context(roots={len(self.roots)}, nodes={len(self.node_index)}, root_ids=[{roots}])"
+    
+
+    def update_parameters(self, parameter_updates: list[dict]) -> None:
+        for node_update in parameter_updates:
+            node_id = node_update.get("target_node_id")
+            tool_args_update = node_update.get("tool_args")
+
+            if not node_id or not isinstance(tool_args_update, dict):
+                continue
+
+            try:
+                target_node_id = UUID(str(node_id))
+            except (TypeError, ValueError):
+                continue
+
+            target_node = self.get_node(node_id=target_node_id)
+            if not target_node:
+                continue
+
+            if not isinstance(target_node.tool_args, dict):
+                target_node.tool_args = {}
+
+            target_node.tool_args.update(tool_args_update)

@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from agent.adapter.outbound.mcp_oauth_flow import enqueue_oauth_callback
 from agent.domain.agent import Agent
-from agent.domain.react import loop_run_cycle
+from agent.domain.react.react import loop_run_cycle
 from agent.domain.context import Context, Node
 from agent.adapter.inbound.http.dependencies import (
     get_tools,

@@ -40,7 +40,7 @@ For JSON output:
 - An abstract sub-goal that will be decomposed further in a subsequent planning cycle
 - A concrete action mapped to an available MCP tool
 
-Only the FIRST actionable leaf node (with a tool_name) should be completely planned (with parameters). All other actionable nodes should be partially planned (tool_name only, tool_args = null). This allows for adaptive execution where later steps can be refined based on early results.
+Only the FIRST actionable leaf node (with a tool_name) should be completely planned (with parameters), and those parameters must already be known at planning time. Do not use placeholder values, guessed arguments, or null for the first actionable leaf's tool_args. All other actionable nodes should be partially planned (tool_name only, tool_args = null). This allows for adaptive execution where later steps can be refined based on early results.
 
 ## Decomposition Process:
 
@@ -76,7 +76,9 @@ Only the FIRST actionable leaf node (with a tool_name) should be completely plan
    - Exactly ONE fully planned leaf among direct children:
      * Only leaf_1 (the first actionable child) is allowed to:
        - have type = "fully_planned",
-       - include both "tool_name" AND a non-null "tool_args" object (completely planned).
+    - include both "tool_name" AND a non-null "tool_args" object (completely planned).
+    - use only tool arguments that are already known and justified by the current goal/context.
+    - never invent placeholder values, guesses, or "to be determined" fields.
    - All other actionable direct children must be partially planned:
      * For EVERY other actionable child (leaf_2, leaf_3, ...), you MUST:
        - set type = "parcially_planned",

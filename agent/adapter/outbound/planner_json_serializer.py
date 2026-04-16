@@ -38,6 +38,8 @@ class ContextJsonSerializer(ContextSerializer):
             return {k: self._to_jsonable(v) for k, v in value.items()}
         if is_dataclass(value):
             return {k: self._to_jsonable(v) for k, v in value.__dict__.items()}
+        if hasattr(value, "__dict__"):
+            return {k: self._to_jsonable(v) for k, v in value.__dict__.items()}
         return value
 
     def serialize_node(self, node: Node) -> dict[str, Any]:
