@@ -24,10 +24,10 @@ def check_if_folder_exists(path: Path) -> Path:
 
 
 class NullMemory(Memory):
-    def save(self, context):
+    def save(self, context, memory_type: str = "episodic"):
         return None
 
-    def query(self, goal: str, filter: dict | None=None):
+    def query(self, goal: str, filter: dict | None = None, memory_type: str | None = None):
         return []
 
     def retrieve_plan(self, goal_text: str, clear_results: bool) -> Any:

@@ -39,6 +39,9 @@ class Node:
     tool_name: Optional[str] = None
     tool_args: Optional[Dict[str, Any]] = None
 
+    # tool hints
+    annotation: str = ""
+
     # tool outcome
     tool_response: Optional[str] = None
     tool_response_summary: Optional[Dict[str, Any] | str] = None
@@ -70,6 +73,7 @@ class Node:
             f"- id={self.id} status={self.node_status.name} "
             f"type={self.node_type.name} goal={self.value}"
             f"tool={self.tool_name} tool_args={self.tool_args}"
+            f"annotation={self.annotation}"
             f"summary={self.tool_response_summary}"
             f"preconditions={self.preconditions}"
             f"effects={self.effects}"
@@ -133,7 +137,7 @@ class Context:
             if root is None:
                 return None
 
-            ordered_nodes = self._bfs_order(root)
+            ordered_nodes = self.bfs_nodes(root)
             try:
                 idx = ordered_nodes.index(node)
             except ValueError:
@@ -157,7 +161,7 @@ class Context:
             if root is None:
                 return []
 
-            ordered_nodes = self._bfs_order(root)
+            ordered_nodes = self.bfs_nodes(root)
             try:
                 idx = ordered_nodes.index(node)
             except ValueError:
@@ -177,7 +181,7 @@ class Context:
             if root is None:
                 return []
 
-            ordered_nodes = self._bfs_order(root)
+            ordered_nodes = self.bfs_nodes(root)
             try:
                 idx = ordered_nodes.index(node)
             except ValueError:
@@ -195,9 +199,14 @@ class Context:
             return current
         return None
 
-    def _bfs_order(self, root: Node) -> list[Node]:
+    def bfs_nodes(self, root: Optional[Node] = None) -> list[Node]:
+        """Return nodes in BFS order.
+
+        If root is provided, traversal is limited to that subtree.
+        If root is None, traversal runs across all context roots.
+        """
         ordered: list[Node] = []
-        queue: list[Node] = [root]
+        queue: list[Node] = [root] if root is not None else list(self.roots)
         seen: Set[UUID] = set()
 
         while queue:
@@ -269,10 +278,9 @@ class Context:
         self.rebuild_indexes()
 
         leaf_nodes: list[Node] = []
-        for root in self.roots:
-            for node in self._bfs_order(root):
-                if not node.children:
-                    leaf_nodes.append(node)
+        for node in self.bfs_nodes():
+            if not node.children:
+                leaf_nodes.append(node)
 
         return leaf_nodes
 

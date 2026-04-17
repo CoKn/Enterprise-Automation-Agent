@@ -51,6 +51,7 @@ def node_to_dict(node: Node) -> Dict[str, Any]:
         "status": node.status.name,
         "tool_name": node.tool_name,
         "tool_args": _json_safe(node.tool_args),
+        "annotation": node.annotation,
         "tool_response": _json_safe(node.tool_response),
         "tool_response_summary": node.tool_response_summary,
         "preconditions": list(node.preconditions) if node.preconditions is not None else [],

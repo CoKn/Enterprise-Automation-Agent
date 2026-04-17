@@ -91,6 +91,7 @@ class ChromadbAdapter(Memory):
             "type": base_metadata.get("type") or "abstract",
             "created_at": base_metadata.get("created_at"),
             "tool_name": base_metadata.get("tool_name"),
+            "annotation": base_metadata.get("annotation") or "",
             "tool_response_summary": summary_text,
             "preconditions": precondition_docs,
             "effects": effect_docs,
@@ -135,7 +136,7 @@ class ChromadbAdapter(Memory):
 
         return context_from_dict(root_dict)
 
-    def save(self, context: Context):
+    def save(self, context: Context, memory_type: str = "episodic"):
         nodes_value = self.client.get_or_create_collection(name="nodes_value")
         nodes_summary = self.client.get_or_create_collection(name="nodes_summary")
         nodes_preconditions = self.client.get_or_create_collection(name="nodes_preconditions")
@@ -190,6 +191,7 @@ class ChromadbAdapter(Memory):
             base_metadata: Dict[str, Any] = {
                 "id": node_id,
                 "tool_name": node.get("tool_name") or None,
+                "annotation": node.get("annotation") or "",
                 "tool_summary": node.get("tool_response_summary") or None,
                 "tool_response_text": (
                     tool_response.get("text") if isinstance(tool_response, dict) else str(tool_response)
@@ -207,6 +209,7 @@ class ChromadbAdapter(Memory):
                 "previous": node.get("previous") or None,
                 "parent_id": parent_id,
                 "descendant_of": descendant_of,
+                "memory_type": memory_type,
             }
 
             goal_text = node.get("value")
@@ -280,7 +283,12 @@ class ChromadbAdapter(Memory):
     
 
 
-    def query(self, value: str, filter: dict | None = None) -> Context | None:
+    def query(
+        self,
+        value: str,
+        filter: dict | None = None,
+        memory_type: str | None = None,
+    ) -> Context | None:
         if not value or not value.strip():
             return None
 
@@ -299,6 +307,12 @@ class ChromadbAdapter(Memory):
             raw_where = filter.get("where")
             if isinstance(raw_where, dict):
                 where = raw_where
+
+        if memory_type:
+            if where is None:
+                where = {"memory_type": memory_type}
+            else:
+                where = {**where, "memory_type": memory_type}
 
         collection = self.client.get_or_create_collection(name=collection_name)
         result = collection.query(
