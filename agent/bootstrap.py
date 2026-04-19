@@ -7,6 +7,7 @@ from typing import Any
 from dotenv import load_dotenv
 
 from agent.adapter.outbound.openai_adapter import OpenAIAdapter
+from agent.adapter.outbound.azure_openai_adapter import AzureOpenAIAdapter
 from agent.adapter.outbound.mcp_adapter import MCPAdapter, McpEndpointConfig
 from agent.adapter.outbound.mcp_token_storage import FileTokenStorage
 from agent.adapter.outbound.planner_json_serializer import ContextJsonSerializer
@@ -56,9 +57,16 @@ class AppContainer:
 def build_container(base_dir: Path) -> AppContainer:
     db_dir = check_if_folder_exists(base_dir / "db")
 
-    llm = OpenAIAdapter(
+    llm_openai = OpenAIAdapter(
         api_key=os.getenv("OPENAI_API_KEY"),
         deployment_name=os.getenv("LLM_MODEL"),
+    )
+
+    llm_azure_openai = AzureOpenAIAdapter(
+        endpoint=os.getenv("AZURE_ENDPOINT"),
+        api_key=os.getenv("AZURE_API_KEY"), 
+        deployment_name=os.getenv("LLM_MODEL"),
+        api_version=os.getenv("AZURE_API_VERSION"),
     )
 
     config_path = base_dir / "agent" / "config.json"
@@ -94,12 +102,12 @@ def build_container(base_dir: Path) -> AppContainer:
     memory = ChromadbAdapter(os.getenv("CHROMADB"))
 
     context_serializer = ContextJsonSerializer()
-    planner = Planner(llm=llm, serializer=context_serializer)
+    planner = Planner(llm=llm_azure_openai, serializer=context_serializer)
     template_renderer = JinjaTemplateRenderer()
 
     return AppContainer(
         memory=memory,
-        llm=llm,
+        llm=llm_azure_openai,
         tools=tools,
         context_serializer=context_serializer,
         planner=planner,

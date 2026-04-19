@@ -61,7 +61,7 @@ class MCPAdapter(Tools):
         self._tools.clear()
 
         # Tune these as you like
-        init_timeout_s = 30.0
+        init_timeout_s = 60.0
         list_tools_timeout_s = 30.0
 
         oauth_last = sorted(

@@ -21,9 +21,8 @@ def has_ancestor_in_set(node: Node, ancestor_ids: set[str]) -> bool:
     return False
 
 
-# TODO: make it a perfect match for the moment
 def query_existing_procedural(agent_session: Agent, goal: str) -> Optional[Context]:
-    filter = {"collection": "nodes_value", "n_results": 1}
+    filter = {"collection": "nodes_value", "n_results": 1, "max_distance": 0.2}
     return agent_session.memory.query(goal, filter=filter, memory_type="procedural")
 
 
@@ -63,6 +62,35 @@ def add_reference_annotation(node: Node, reference_root: Node) -> None:
         node.annotation = f"{node.annotation}\n{reference_hint}"
     else:
         node.annotation = reference_hint
+
+
+def clean_reflected_context(context: Context) -> None:
+    """Clean up reflected context to enforce reflection rules.
+    
+    - Remove tool_response_summary from all nodes
+    - Mark as fully_planned only nodes with BOTH tool_name AND tool_args
+    - Ensure all nodes have status = pending
+    """
+    context.rebuild_indexes()
+    
+    for node in context.node_index.values():
+        # Remove tool response summary
+        node.tool_response_summary = None
+        
+        # Keep status as pending
+        node.node_status = NodeStatus.pending
+        
+        # Re-classify node type: fully_planned requires BOTH tool_name and tool_args
+        if node.node_type == NodeType.fully_planned:
+            has_tool_name = bool(node.tool_name and str(node.tool_name).strip())
+            has_tool_args = isinstance(node.tool_args, dict) and len(node.tool_args) > 0
+            
+            if not (has_tool_name and has_tool_args):
+                # Downgrade to partially_planned if missing either tool_name or tool_args
+                node.node_type = NodeType.parcially_planned
+
+            if not has_tool_name:
+                node.node_type = NodeType.abstract
 
 
 def save_distilled_procedural(agent_session: Agent, procedural_context: Context) -> dict[str, int]:
@@ -156,6 +184,10 @@ async def reflect(agent_session: Agent):
         raise ValueError("Reflection result did not contain a valid context tree")
 
     procedural_context.rebuild_indexes()
+    
+    # Enforce reflection rules on deserialized context
+    clean_reflected_context(procedural_context)
+    
     agent_session.memory_context = procedural_context
 
     persistence_stats = save_distilled_procedural(

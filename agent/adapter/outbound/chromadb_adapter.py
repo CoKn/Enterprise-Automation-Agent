@@ -298,12 +298,16 @@ class ChromadbAdapter(Memory):
 
         n_results = 1
         where: Dict[str, Any] | None = None
+        max_distance: float | None = None
         include: list[str] = ["documents", "metadatas", "distances"]
 
         if filter:
             raw_n_results = filter.get("n_results")
             if isinstance(raw_n_results, int) and raw_n_results > 0:
                 n_results = raw_n_results
+            raw_max_distance = filter.get("max_distance")
+            if isinstance(raw_max_distance, (int, float)):
+                max_distance = float(raw_max_distance)
             raw_where = filter.get("where")
             if isinstance(raw_where, dict):
                 where = raw_where
@@ -324,8 +328,17 @@ class ChromadbAdapter(Memory):
 
         ids_rows = result.get("ids") or []
         metas_rows = result.get("metadatas") or []
+        distances_rows = result.get("distances") or []
         ids = ids_rows[0] if ids_rows and isinstance(ids_rows[0], list) else []
         metas = metas_rows[0] if metas_rows and isinstance(metas_rows[0], list) else []
+        distances = (
+            distances_rows[0] if distances_rows and isinstance(distances_rows[0], list) else []
+        )
+
+        if max_distance is not None:
+            first_distance = distances[0] if distances else None
+            if not isinstance(first_distance, (int, float)) or float(first_distance) > max_distance:
+                return None
 
         node_id: str | None = None
         if metas and isinstance(metas[0], dict):

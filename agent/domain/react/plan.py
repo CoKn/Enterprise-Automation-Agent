@@ -18,24 +18,45 @@ async def plan(agent_session: Agent):
     if not agent_session.active_node:
         return
     
-    # TODO: adjust for new memory structure
 
     # retrieve plan or context (episodic memory) or semantic memory or None
-    # check for old plans
-    filter = {"collection": "nodes_value"}
-    # existing_plan = agent_session.memory.query(agent_session.active_node.value, filter=filter)
-    existing_plan = None
+    filter = {"collection": "nodes_value", "n_results": 1, "max_distance": 0.2}
+    existing_plan = agent_session.memory.query(
+        agent_session.active_node.value,
+        filter=filter,
+        memory_type="procedural",
+    )
     if existing_plan:
         agent_session.context = existing_plan
         agent_session.global_goal_node = existing_plan.get_root()
-        agent_session.active_node = existing_plan.next_node(agent_session.global_goal_node)
-        if agent_session.active_node:
+        root = agent_session.global_goal_node
+        
+        # Try to get the next executable node
+        next_executable = existing_plan.next_node(root)
+        
+        if next_executable:
+            # Found a next actionable node; use it
+            agent_session.active_node = next_executable
             logger.info("Reusing cached plan for goal '%s'", agent_session.active_node.value)
+            serialized_context = agent_session.planner.serializer.serialize_context(agent_session.context)
+            logger.info("%s:\n%s", "Context Tree", json.dumps(serialized_context, indent=2, default=str))
+            return
+        elif root.node_type == NodeType.fully_planned:
+            # Root is fully planned and ready to execute
+            agent_session.active_node = root
+            logger.info("Reusing cached plan for goal root '%s'", root.value)
+            serialized_context = agent_session.planner.serializer.serialize_context(agent_session.context)
+            logger.info("%s:\n%s", "Context Tree", json.dumps(serialized_context, indent=2, default=str))
+            return
+        elif root.node_type == NodeType.parcially_planned:
+            # Root is partially planned; continue to parameter generation
+            agent_session.active_node = root
+            logger.info("Reusing cached plan (partially planned) for goal root '%s'", root.value)
+            # Fall through to parameter generation below
         else:
-            logger.info("Reusing cached plan for goal root '%s'", agent_session.global_goal_node.value)
-
-        logger.info("Plan '%s'", agent_session.context)
-        return
+            # Root is abstract; fall through to planning
+            agent_session.active_node = root
+            logger.info("Reusing cached plan (abstract) for goal root '%s'", root.value)
     
     # case of failed execution, replan
     if agent_session.active_node.status == NodeStatus.failed and agent_session.active_node.type == NodeType.fully_planned:
