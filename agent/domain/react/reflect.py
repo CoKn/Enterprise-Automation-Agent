@@ -120,7 +120,7 @@ def save_distilled_procedural(agent_session: Agent, procedural_context: Context)
         if existing_root and existing_root.value.strip().lower() == node.value.strip().lower():
             existing_matches[str(node.id)] = existing_root
 
-    # Pass 2: apply reference/save decisions using the precomputed duplicate view.
+    # pass 2: apply reference/save decisions using the precomputed duplicate view.
     handled_abstract_ids: set[str] = set()
     reused = 0
     saved = 0
@@ -169,10 +169,22 @@ async def reflect(agent_session: Agent):
         },
     )
 
-    result: str = agent_session.llm.call(
+    llm_result = agent_session.llm.call(
         prompt=reflection_prompt_rendered,
         json_mode=True,
     )
+
+    if llm_result.get("error"):
+        raise RuntimeError(llm_result["error"])
+
+    logger.info(
+        "LLM usage phase=reflect prompt_tokens=%s completion_tokens=%s total_tokens=%s",
+        llm_result.get("prompt_tokens", 0),
+        llm_result.get("completion_tokens", 0),
+        llm_result.get("total_tokens", 0),
+    )
+
+    result: str = llm_result.get("response") or ""
 
     try:
         reflection_payload = json.loads(result)

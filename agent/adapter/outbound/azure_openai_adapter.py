@@ -1,7 +1,7 @@
 from agent.application.ports.outbound.llm_interface import LLM
 from openai import AzureOpenAI, OpenAIError
 from pydantic import BaseModel, PrivateAttr
-from typing import Optional
+from typing import Any, Optional
 import asyncio
 
 class AzureOpenAIAdapter(LLM, BaseModel):
@@ -19,7 +19,7 @@ class AzureOpenAIAdapter(LLM, BaseModel):
             api_version=self.api_version
         )
 
-    def call(self, prompt, system_prompt: str = "You are a helpfull assistant.", json_mode: bool=False, max_tokens: int=16384, temperature: int=0, top_p: int=1) -> str:
+    def call(self, prompt, system_prompt: str = "You are a helpfull assistant.", json_mode: bool=False, max_tokens: int=16384, temperature: int=0, top_p: int=1) -> dict[str, Any]:
         if json_mode:
             response_type = 'json_object'
         else:
@@ -38,9 +38,26 @@ class AzureOpenAIAdapter(LLM, BaseModel):
                 model=self.deployment_name
             )
 
-            return response.choices[0].message.content
+            usage = response.usage
+            return_obj = {
+                "response": response.choices[0].message.content,
+                "prompt_tokens": usage.prompt_tokens if usage else 0,
+                "completion_tokens": usage.completion_tokens if usage else 0,
+                "total_tokens": usage.total_tokens if usage else 0,
+                "model": response.model,
+                "provider": "azure-openai",
+            }
+            return return_obj
         except OpenAIError as e:
-            return f"An Azure error occurred: {e}"
+            return {
+                "response": "",
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+                "model": self.deployment_name,
+                "provider": "azure-openai",
+                "error": f"An Azure error occurred: {e}",
+            }
 
     async def call_stream(
         self, 

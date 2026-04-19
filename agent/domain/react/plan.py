@@ -144,7 +144,19 @@ async def plan(agent_session: Agent):
             },
         )
         
-        resp = agent_session.llm.call(prompt=parameter_generation_prompt_rendered, json_mode=True)
+        llm_result = agent_session.llm.call(prompt=parameter_generation_prompt_rendered, json_mode=True)
+
+        if llm_result.get("error"):
+            raise RuntimeError(llm_result["error"])
+
+        logger.info(
+            "LLM usage phase=parameter_generation prompt_tokens=%s completion_tokens=%s total_tokens=%s",
+            llm_result.get("prompt_tokens", 0),
+            llm_result.get("completion_tokens", 0),
+            llm_result.get("total_tokens", 0),
+        )
+
+        resp = llm_result.get("response") or ""
 
         try:
             agent_session.active_node.tool_args = json.loads(resp).get("arguments")

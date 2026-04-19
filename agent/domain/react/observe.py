@@ -43,8 +43,22 @@ async def observe(agent_session: Agent):
     )
 
     try:
-        response = json.loads(agent_session.llm.call(json_mode=True,
-                                                     prompt=step_observation_prompt_rendered))
+        llm_result = agent_session.llm.call(
+            json_mode=True,
+            prompt=step_observation_prompt_rendered,
+        )
+
+        if llm_result.get("error"):
+            raise RuntimeError(llm_result["error"])
+
+        logger.info(
+            "LLM usage phase=observe prompt_tokens=%s completion_tokens=%s total_tokens=%s",
+            llm_result.get("prompt_tokens", 0),
+            llm_result.get("completion_tokens", 0),
+            llm_result.get("total_tokens", 0),
+        )
+
+        response = json.loads(llm_result.get("response") or "")
 
         agent_session.active_node.tool_response_summary = response.get("summary")
 
@@ -62,9 +76,6 @@ async def observe(agent_session: Agent):
 
          # bubble up completion to parents
         agent_session.context.recompute_statuses()
-
-        # update node status in db 
-        agent_session.memory.save(context=agent_session.context)
 
         metadata = agent_session.memory.save(context=agent_session.context)
         logger.debug("Persisted context metadata: %s", metadata)

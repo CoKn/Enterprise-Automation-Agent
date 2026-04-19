@@ -46,10 +46,22 @@ class Planner:
         )
 
         # 3. send prompt to LLM
-        result: str = self.llm.call(
+        llm_result = self.llm.call(
             prompt=json.dumps(user_payload),
             system_prompt=system_prompt,
             json_mode=True,
+        )
+
+        if llm_result.get("error"):
+            raise RuntimeError(llm_result["error"])
+
+        result: str = llm_result.get("response") or ""
+
+        logger.info(
+            "LLM usage phase=plan prompt_tokens=%s completion_tokens=%s total_tokens=%s",
+            llm_result.get("prompt_tokens", 0),
+            llm_result.get("completion_tokens", 0),
+            llm_result.get("total_tokens", 0),
         )
 
         logger.info(
@@ -92,10 +104,22 @@ class Planner:
         )
 
         # 3. send prompt to LLM
-        result: str = self.llm.call(
+        llm_result = self.llm.call(
             prompt=json.dumps(user_payload),
             system_prompt=system_prompt,
             json_mode=True,
+        )
+
+        if llm_result.get("error"):
+            raise RuntimeError(llm_result["error"])
+
+        result: str = llm_result.get("response") or ""
+
+        logger.info(
+            "LLM usage phase=replan prompt_tokens=%s completion_tokens=%s total_tokens=%s",
+            llm_result.get("prompt_tokens", 0),
+            llm_result.get("completion_tokens", 0),
+            llm_result.get("total_tokens", 0),
         )
 
         logger.info(

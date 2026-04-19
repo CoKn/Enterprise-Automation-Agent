@@ -1,6 +1,7 @@
 from agent.application.ports.outbound.llm_interface import LLM
 from openai import OpenAI, OpenAIError
 from pydantic import BaseModel, PrivateAttr
+from typing import Any
 
 
 class OpenAIAdapter(LLM, BaseModel):
@@ -20,7 +21,7 @@ class OpenAIAdapter(LLM, BaseModel):
         max_tokens: int = 16384,
         temperature: float = 0,
         top_p: float = 1
-    ) -> str:
+    ) -> dict[str, Any]:
         response_type = "json_object" if json_mode else "text"
         try:
             messages = [
@@ -35,6 +36,22 @@ class OpenAIAdapter(LLM, BaseModel):
                 top_p=top_p,
                 response_format={"type": response_type},
             )
-            return resp.choices[0].message.content
+            usage = resp.usage
+            return {
+                "response": resp.choices[0].message.content,
+                "prompt_tokens": usage.prompt_tokens if usage else 0,
+                "completion_tokens": usage.completion_tokens if usage else 0,
+                "total_tokens": usage.total_tokens if usage else 0,
+                "model": resp.model,
+                "provider": "openai",
+            }
         except OpenAIError as e:
-            return f"An OpenAI error occurred: {e}"
+            return {
+                "response": "",
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+                "model": self.deployment_name,
+                "provider": "openai",
+                "error": f"An OpenAI error occurred: {e}",
+            }
