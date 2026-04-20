@@ -98,6 +98,8 @@ async def observe(agent_session: Agent):
         # set next active node if a next node exists
         if (next_node := agent_session.context.next_node(agent_session.active_node)):
             agent_session.active_node = next_node
+        else:
+            agent_session.termination = True
 
     except Exception as e:
         agent_session.active_node.node_status = NodeStatus.failed
@@ -107,5 +109,7 @@ async def observe(agent_session: Agent):
 
         # update node status in db 
         agent_session.memory.save(context=agent_session.context)
+
+        agent_session.termination = True
 
         raise RuntimeError(f"Observation has failed: {e}") from e

@@ -26,6 +26,7 @@ ANNOTATION RULES:
   - how to execute it reliably,
   - which args are stable vs unstable,
   - prerequisites and expected effects.
+- When possible, base the annotation on examples of successful parameter invocations from the trace.
 - If unstable args were removed, annotation must explicitly state which values are dynamic
   and what preceding evidence/step is needed to obtain them.
 
