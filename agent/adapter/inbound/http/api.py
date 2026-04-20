@@ -13,6 +13,7 @@ from agent.adapter.inbound.http.dependencies import (
     get_tools,
     get_llm,
     get_memory,
+    get_analytics,
     get_planner,
     get_template_renderer,
 )
@@ -63,6 +64,7 @@ async def call_agent(
     tools=Depends(get_tools),
     llm=Depends(get_llm),
     memory=Depends(get_memory),
+    analytics=Depends(get_analytics),
     planner=Depends(get_planner),
     template_renderer=Depends(get_template_renderer),
 ):
@@ -74,6 +76,7 @@ async def call_agent(
         tools=tools,
         llm=llm,
         memory=memory,
+        analytics=analytics,
         planner=planner,
         template_renderer=template_renderer,
     )
@@ -82,6 +85,7 @@ async def call_agent(
     agent_session.context = Context(roots=[root_node])
     agent_session.context.rebuild_indexes()
     agent_session.global_goal_node = root_node
+    agent_session.start_run(initial_prompt=req.prompt)
 
     await loop_run_cycle(agent_session=agent_session)
     

@@ -13,6 +13,9 @@ def get_llm(request: Request):
 def get_memory(request: Request):
     return request.app.state.container.memory
 
+def get_analytics(request: Request):
+    return request.app.state.container.analytics
+
 def get_planner(request: Request):
     return request.app.state.container.planner
 

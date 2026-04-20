@@ -1,6 +1,8 @@
 # planner for generating new planns
 import json
+from datetime import datetime
 from uuid import uuid4
+from typing import Optional
 
 from agent.logger import get_logger
 
@@ -11,19 +13,22 @@ from agent.domain.prompts.planner.replanning_prompt import REPLANNING_PROMPT
 
 from agent.application.ports.outbound.llm_interface import LLM
 from agent.application.ports.outbound.context_serializer_interface import ContextSerializer
+from agent.application.ports.outbound.analytics_db_interface import AnalyticsDB
 
 logger = get_logger(__name__)
 
 class Planner:
     llm: LLM
     serializer: ContextSerializer
+    analytics: Optional[AnalyticsDB]
 
-    def __init__(self, llm: LLM, serializer: ContextSerializer):
+    def __init__(self, llm: LLM, serializer: ContextSerializer, analytics: Optional[AnalyticsDB] = None):
         self.llm = llm
         self.serializer = serializer
+        self.analytics = analytics
 
     # TODO: question is how tools are processed
-    def plan(self, root: Node, context: Context, tool_docs: str = ""):
+    def plan(self, root: Node, context: Context, tool_docs: str = "", run_id: str | None = None):
 
         # 1. load planning prompt and format prompt (takes: root node, tool specs, context (for episodic memory and previous nodes))
         system_prompt = PLANNING_PROMPT.format(tool_docs=tool_docs)
@@ -57,6 +62,18 @@ class Planner:
 
         result: str = llm_result.get("response") or ""
 
+        if self.analytics and run_id:
+            self.analytics.save_call(
+            run_id=run_id,
+                phase="plan",
+                model=str(llm_result.get("model") or "unknown"),
+                provider=str(llm_result.get("provider") or "unknown"),
+                prompt_tokens=int(llm_result.get("prompt_tokens") or 0),
+                completion_tokens=int(llm_result.get("completion_tokens") or 0),
+                total_tokens=int(llm_result.get("total_tokens") or 0),
+                created_at=datetime.now(),
+            )
+
         logger.info(
             "LLM usage phase=plan prompt_tokens=%s completion_tokens=%s total_tokens=%s",
             llm_result.get("prompt_tokens", 0),
@@ -84,7 +101,7 @@ class Planner:
         return context_result
 
 
-    def replan(self, root: Node, context: Context, tool_docs: str = ""):
+    def replan(self, root: Node, context: Context, tool_docs: str = "", run_id: str | None = None):
         # 1. load replanning prompt and format with available tools
         system_prompt = REPLANNING_PROMPT.format(tool_docs=tool_docs)
 
@@ -114,6 +131,18 @@ class Planner:
             raise RuntimeError(llm_result["error"])
 
         result: str = llm_result.get("response") or ""
+
+        if self.analytics and run_id:
+            self.analytics.save_call(
+            run_id=run_id,
+                phase="replan",
+                model=str(llm_result.get("model") or "unknown"),
+                provider=str(llm_result.get("provider") or "unknown"),
+                prompt_tokens=int(llm_result.get("prompt_tokens") or 0),
+                completion_tokens=int(llm_result.get("completion_tokens") or 0),
+                total_tokens=int(llm_result.get("total_tokens") or 0),
+                created_at=datetime.now(),
+            )
 
         logger.info(
             "LLM usage phase=replan prompt_tokens=%s completion_tokens=%s total_tokens=%s",

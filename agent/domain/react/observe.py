@@ -58,6 +58,11 @@ async def observe(agent_session: Agent):
             llm_result.get("total_tokens", 0),
         )
 
+        agent_session.record_llm_usage(
+            phase="observe",
+            llm_result=llm_result,
+        )
+
         response = json.loads(llm_result.get("response") or "")
 
         agent_session.active_node.tool_response_summary = response.get("summary")

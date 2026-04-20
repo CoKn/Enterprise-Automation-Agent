@@ -184,6 +184,11 @@ async def reflect(agent_session: Agent):
         llm_result.get("total_tokens", 0),
     )
 
+    agent_session.record_llm_usage(
+        phase="reflect",
+        llm_result=llm_result,
+    )
+
     result: str = llm_result.get("response") or ""
 
     try:

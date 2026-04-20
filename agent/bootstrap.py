@@ -12,8 +12,10 @@ from agent.adapter.outbound.mcp_adapter import MCPAdapter, McpEndpointConfig
 from agent.adapter.outbound.mcp_token_storage import FileTokenStorage
 from agent.adapter.outbound.planner_json_serializer import ContextJsonSerializer
 from agent.adapter.outbound.jinja_template_renderer import JinjaTemplateRenderer
+from agent.adapter.outbound.sqlite_analytics_adapter import SQLiteAnalyticsAdapter
 from agent.domain.planner import Planner
 from agent.application.ports.outbound.memory_interface import Memory
+from agent.application.ports.outbound.analytics_db_interface import AnalyticsDB
 from agent.adapter.outbound.chromadb_adapter import ChromadbAdapter
 from agent.application.ports.outbound.template_renderer_interface import TemplateRenderer
 
@@ -38,6 +40,7 @@ class NullMemory(Memory):
 @dataclass
 class AppContainer:
     memory: Memory
+    analytics: AnalyticsDB
     llm: OpenAIAdapter
     tools: MCPAdapter
     context_serializer: ContextJsonSerializer
@@ -100,13 +103,15 @@ def build_container(base_dir: Path) -> AppContainer:
     )
 
     memory = ChromadbAdapter(os.getenv("CHROMADB"))
+    analytics = SQLiteAnalyticsAdapter(db_dir / "analytics.sqlite3")
 
     context_serializer = ContextJsonSerializer()
-    planner = Planner(llm=llm_azure_openai, serializer=context_serializer)
+    planner = Planner(llm=llm_azure_openai, serializer=context_serializer, analytics=analytics)
     template_renderer = JinjaTemplateRenderer()
 
     return AppContainer(
         memory=memory,
+        analytics=analytics,
         llm=llm_azure_openai,
         tools=tools,
         context_serializer=context_serializer,

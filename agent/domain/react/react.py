@@ -26,6 +26,8 @@ async def run_cycle(agent_session: Agent):
 
 async def loop_run_cycle(agent_session: Agent):
     # loop react cycle 
+    run_error = False
+    reflect_error = False
     try:
         while not agent_session.termination:
 
@@ -42,6 +44,15 @@ async def loop_run_cycle(agent_session: Agent):
             await run_cycle(agent_session=agent_session)
 
             agent_session.step_counter += 1
+    except Exception:
+        run_error = True
+        raise
     finally:
         if agent_session.global_goal_node:
-            await reflect(agent_session=agent_session)
+            try:
+                await reflect(agent_session=agent_session)
+            except Exception:
+                reflect_error = True
+                raise
+            finally:
+                agent_session.finish_run(status="failed" if (run_error or reflect_error) else "completed")

@@ -66,7 +66,8 @@ async def plan(agent_session: Agent):
         agent_session.context = agent_session.planner.replan(
             context=agent_session.context,
             root=failed_node,
-            tool_docs=tool_docs
+            tool_docs=tool_docs,
+            run_id=agent_session.run_id,
         )
 
         new_root = agent_session.context.get_root()
@@ -101,6 +102,7 @@ async def plan(agent_session: Agent):
             context=agent_session.context,
             root=agent_session.active_node,
             tool_docs=tool_docs,
+            run_id=agent_session.run_id,
         )
 
         # update agent session with new context, global goal node and active node
@@ -154,6 +156,11 @@ async def plan(agent_session: Agent):
             llm_result.get("prompt_tokens", 0),
             llm_result.get("completion_tokens", 0),
             llm_result.get("total_tokens", 0),
+        )
+
+        agent_session.record_llm_usage(
+            phase="parameter_generation",
+            llm_result=llm_result,
         )
 
         resp = llm_result.get("response") or ""
