@@ -1,6 +1,5 @@
 # planner for generating new planns
 import json
-from datetime import datetime
 from uuid import uuid4
 from typing import Optional
 
@@ -27,7 +26,6 @@ class Planner:
         self.serializer = serializer
         self.analytics = analytics
 
-    # TODO: question is how tools are processed
     def plan(self, root: Node, context: Context, tool_docs: str = "", run_id: str | None = None):
 
         # 1. load planning prompt and format prompt (takes: root node, tool specs, context (for episodic memory and previous nodes))
@@ -36,7 +34,6 @@ class Planner:
         # 2. serialize root and context and create payload
         root_payload = self.serializer.serialize_node(root)
 
-        # TODO: check if complete tree is serialized
         context_payload = self.serializer.serialize_context(context)
 
         user_payload = {
@@ -62,18 +59,6 @@ class Planner:
 
         result: str = llm_result.get("response") or ""
 
-        if self.analytics and run_id:
-            self.analytics.save_call(
-            run_id=run_id,
-                phase="plan",
-                model=str(llm_result.get("model") or "unknown"),
-                provider=str(llm_result.get("provider") or "unknown"),
-                prompt_tokens=int(llm_result.get("prompt_tokens") or 0),
-                completion_tokens=int(llm_result.get("completion_tokens") or 0),
-                total_tokens=int(llm_result.get("total_tokens") or 0),
-                created_at=datetime.now(),
-            )
-
         logger.info(
             "LLM usage phase=plan prompt_tokens=%s completion_tokens=%s total_tokens=%s",
             llm_result.get("prompt_tokens", 0),
@@ -98,7 +83,7 @@ class Planner:
         except json.JSONDecodeError:
             raise ValueError(f"Planner LLM did not return valid JSON: {result}")
 
-        return context_result
+        return context_result, llm_result
 
 
     def replan(self, root: Node, context: Context, tool_docs: str = "", run_id: str | None = None):
@@ -132,18 +117,6 @@ class Planner:
 
         result: str = llm_result.get("response") or ""
 
-        if self.analytics and run_id:
-            self.analytics.save_call(
-            run_id=run_id,
-                phase="replan",
-                model=str(llm_result.get("model") or "unknown"),
-                provider=str(llm_result.get("provider") or "unknown"),
-                prompt_tokens=int(llm_result.get("prompt_tokens") or 0),
-                completion_tokens=int(llm_result.get("completion_tokens") or 0),
-                total_tokens=int(llm_result.get("total_tokens") or 0),
-                created_at=datetime.now(),
-            )
-
         logger.info(
             "LLM usage phase=replan prompt_tokens=%s completion_tokens=%s total_tokens=%s",
             llm_result.get("prompt_tokens", 0),
@@ -164,6 +137,7 @@ class Planner:
             if isinstance(replanned, dict):
                 if isinstance(replanned.get("node"), dict):
                     insertion_payload = replanned.get("node")
+                    # TODO: remove this
                 elif isinstance(replanned.get("root"), dict):
                     # Backward compatibility for older prompt outputs.
                     insertion_payload = replanned.get("root")
@@ -174,6 +148,7 @@ class Planner:
             insertion_node = self.serializer.deserialize_node(insertion_payload)
             insertion_node.id = insertion_node.id or uuid4()
             insertion_node.node_status = NodeStatus.pending
+            insertion_node.cached = False
             insertion_node.tool_response = None
             insertion_node.tool_response_summary = None
 
@@ -212,4 +187,4 @@ class Planner:
         except json.JSONDecodeError:
             raise ValueError(f"Planner LLM did not return valid JSON for replan: {result}")
 
-        return context
+        return context, llm_result

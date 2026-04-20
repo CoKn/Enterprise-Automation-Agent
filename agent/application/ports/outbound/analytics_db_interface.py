@@ -36,6 +36,9 @@ class AnalyticsDB(ABC):
         total_prompt_tokens: int,
         total_completion_tokens: int,
         total_tokens: int,
+        total_nodes: int,
+        cached_node_count: int,
+        new_node_count: int,
         status: str = "completed",
     ) -> None:
         ...

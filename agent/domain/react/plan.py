@@ -14,6 +14,12 @@ import json
 logger = get_logger(__name__)
 
 
+def _mark_subtree_cached(node):
+    node.cached = True
+    for child in node.children:
+        _mark_subtree_cached(child)
+
+
 async def plan(agent_session: Agent):
     if not agent_session.active_node:
         return
@@ -27,6 +33,9 @@ async def plan(agent_session: Agent):
         memory_type="procedural",
     )
     if existing_plan:
+        for existing_root in existing_plan.roots:
+            _mark_subtree_cached(existing_root)
+
         agent_session.context = existing_plan
         agent_session.global_goal_node = existing_plan.get_root()
         root = agent_session.global_goal_node
@@ -63,11 +72,16 @@ async def plan(agent_session: Agent):
         failed_node = agent_session.active_node
         tool_docs = await agent_session.tools.get_tools_json()
 
-        agent_session.context = agent_session.planner.replan(
+        agent_session.context, llm_result = agent_session.planner.replan(
             context=agent_session.context,
             root=failed_node,
             tool_docs=tool_docs,
             run_id=agent_session.run_id,
+        )
+
+        agent_session.record_llm_usage(
+            phase="replan",
+            llm_result=llm_result,
         )
 
         new_root = agent_session.context.get_root()
@@ -98,11 +112,16 @@ async def plan(agent_session: Agent):
     if agent_session.active_node.node_type == NodeType.abstract:
         tool_docs = await agent_session.tools.get_tools_json()
 
-        agent_session.context = agent_session.planner.plan(
+        agent_session.context, llm_result = agent_session.planner.plan(
             context=agent_session.context,
             root=agent_session.active_node,
             tool_docs=tool_docs,
             run_id=agent_session.run_id,
+        )
+
+        agent_session.record_llm_usage(
+            phase="plan",
+            llm_result=llm_result,
         )
 
         # update agent session with new context, global goal node and active node

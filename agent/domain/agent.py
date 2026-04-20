@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Any, Optional
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from agent.application.ports.outbound.analytics_db_interface import AnalyticsDB
 from agent.domain.context import Node, Context
@@ -13,7 +13,7 @@ from agent.application.ports.outbound.template_renderer_interface import Templat
 
 
 class Agent:
-    id: uuid4 = uuid4()
+    id: UUID
     context: Optional[Context]
     memory_context: Optional[Context]
     active_node: Optional[Node]
@@ -45,6 +45,7 @@ class Agent:
         planner: Planner,
         template_renderer: TemplateRenderer,
     ):
+        self.id = uuid4()
         self.max_steps = max_steps
         self.tools = tools
         self.llm = llm
@@ -112,6 +113,15 @@ class Agent:
         finished_at = datetime.now()
         latency_ms = int((finished_at - self.run_started_at).total_seconds() * 1000)
 
+        total_nodes = 0
+        cached_node_count = 0
+        new_node_count = 0
+        if self.context is not None:
+            self.context.rebuild_indexes()
+            total_nodes = len(self.context.node_index)
+            cached_node_count = sum(1 for node in self.context.node_index.values() if node.cached)
+            new_node_count = total_nodes - cached_node_count
+
         self.analytics.save_run_finish(
             run_id=self.run_id,
             finished_at=finished_at,
@@ -119,5 +129,8 @@ class Agent:
             total_prompt_tokens=self.total_prompt_tokens,
             total_completion_tokens=self.total_completion_tokens,
             total_tokens=self.total_tokens,
+            total_nodes=total_nodes,
+            cached_node_count=cached_node_count,
+            new_node_count=new_node_count,
             status=status,
         )

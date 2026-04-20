@@ -49,6 +49,7 @@ def node_to_dict(node: Node) -> Dict[str, Any]:
         "value": node.value,
         "type": node.type.name,
         "status": node.status.name,
+        "cached": node.cached,
         "tool_name": node.tool_name,
         "tool_args": _json_safe(node.tool_args),
         "annotation": node.annotation,

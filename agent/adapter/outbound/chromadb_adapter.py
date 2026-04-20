@@ -89,6 +89,7 @@ class ChromadbAdapter(Memory):
             "value": value_docs[0],
             "status": base_metadata.get("status") or "pending",
             "type": base_metadata.get("type") or "abstract",
+            "cached": bool(base_metadata.get("cached", False)),
             "created_at": base_metadata.get("created_at"),
             "tool_name": base_metadata.get("tool_name"),
             "annotation": base_metadata.get("annotation") or "",
@@ -193,6 +194,7 @@ class ChromadbAdapter(Memory):
                 "tool_name": node.get("tool_name") or None,
                 "annotation": node.get("annotation") or "",
                 "tool_summary": node.get("tool_response_summary") or None,
+                "cached": bool(node.get("cached", False)),
                 "tool_response_text": (
                     tool_response.get("text") if isinstance(tool_response, dict) else str(tool_response)
                 ),

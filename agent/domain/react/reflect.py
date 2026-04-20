@@ -31,6 +31,7 @@ def clone_subtree(node: Node) -> Node:
         value=node.value,
         node_status=NodeStatus.pending,
         node_type=node.node_type,
+        cached=node.cached,
         preconditions=list(node.preconditions or []),
         effects=list(node.effects or []),
         tool_name=node.tool_name,

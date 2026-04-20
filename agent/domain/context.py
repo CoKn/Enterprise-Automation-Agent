@@ -46,6 +46,9 @@ class Node:
     tool_response: Optional[str] = None
     tool_response_summary: Optional[Dict[str, Any] | str] = None
 
+    # cached node
+    cached: bool = False
+
     # data structure pointer
     parent: Optional[Self] = None
     children: list[Self] = field(default_factory=list)
@@ -71,11 +74,11 @@ class Node:
     def to_repr_line(self) -> str:
         return (
             f"- id={self.id} status={self.node_status.name} "
-            f"type={self.node_type.name} goal={self.value}"
-            f"tool={self.tool_name} tool_args={self.tool_args}"
-            f"annotation={self.annotation}"
-            f"summary={self.tool_response_summary}"
-            f"preconditions={self.preconditions}"
+            f"type={self.node_type.name} cached={self.cached} goal={self.value} "
+            f"tool={self.tool_name} tool_args={self.tool_args} "
+            f"annotation={self.annotation} "
+            f"summary={self.tool_response_summary} "
+            f"preconditions={self.preconditions} "
             f"effects={self.effects}"
         )
 

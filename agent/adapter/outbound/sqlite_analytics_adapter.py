@@ -34,10 +34,42 @@ class SQLiteAnalyticsAdapter(AnalyticsDB):
                     status TEXT NOT NULL DEFAULT 'running',
                     total_prompt_tokens INTEGER NOT NULL DEFAULT 0,
                     total_completion_tokens INTEGER NOT NULL DEFAULT 0,
-                    total_tokens INTEGER NOT NULL DEFAULT 0
+                    total_tokens INTEGER NOT NULL DEFAULT 0,
+                    total_nodes INTEGER NOT NULL DEFAULT 0,
+                    cached_node_count INTEGER NOT NULL DEFAULT 0,
+                    new_node_count INTEGER NOT NULL DEFAULT 0
                 )
                 """
             )
+
+            existing_columns = {
+                row[1]
+                for row in connection.execute("PRAGMA table_info(agent_runs)").fetchall()
+            }
+            missing_columns = {
+                "total_nodes": "INTEGER NOT NULL DEFAULT 0",
+                "cached_node_count": "INTEGER NOT NULL DEFAULT 0",
+                "new_node_count": "INTEGER NOT NULL DEFAULT 0",
+            }
+            for column_name, column_type in missing_columns.items():
+                if column_name not in existing_columns:
+                    connection.execute(
+                        f"ALTER TABLE agent_runs ADD COLUMN {column_name} {column_type}"
+                    )
+
+            existing_columns = {
+                row[1]
+                for row in connection.execute("PRAGMA table_info(agent_runs)").fetchall()
+            }
+            if "plan_node_count" in existing_columns and "total_nodes" in existing_columns:
+                connection.execute(
+                    """
+                    UPDATE agent_runs
+                    SET total_nodes = plan_node_count
+                    WHERE total_nodes = 0 AND plan_node_count > 0
+                    """
+                )
+
             connection.execute(
                 """
                 CREATE TABLE IF NOT EXISTS llm_call_analytics (
@@ -130,6 +162,9 @@ class SQLiteAnalyticsAdapter(AnalyticsDB):
         total_prompt_tokens: int,
         total_completion_tokens: int,
         total_tokens: int,
+        total_nodes: int,
+        cached_node_count: int,
+        new_node_count: int,
         status: str = "completed",
     ) -> None:
         with self._connect() as connection:
@@ -141,7 +176,10 @@ class SQLiteAnalyticsAdapter(AnalyticsDB):
                     status = ?,
                     total_prompt_tokens = ?,
                     total_completion_tokens = ?,
-                    total_tokens = ?
+                    total_tokens = ?,
+                    total_nodes = ?,
+                    cached_node_count = ?,
+                    new_node_count = ?
                 WHERE run_id = ?
                 """,
                 (
@@ -151,6 +189,9 @@ class SQLiteAnalyticsAdapter(AnalyticsDB):
                     int(total_prompt_tokens),
                     int(total_completion_tokens),
                     int(total_tokens),
+                    int(total_nodes),
+                    int(cached_node_count),
+                    int(new_node_count),
                     run_id,
                 ),
             )
