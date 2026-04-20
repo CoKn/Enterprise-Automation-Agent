@@ -32,6 +32,7 @@ class SQLiteAnalyticsAdapter(AnalyticsDB):
                     finished_at TEXT,
                     latency_ms INTEGER,
                     status TEXT NOT NULL DEFAULT 'running',
+                    goal_achieved INTEGER NOT NULL DEFAULT 0,
                     total_prompt_tokens INTEGER NOT NULL DEFAULT 0,
                     total_completion_tokens INTEGER NOT NULL DEFAULT 0,
                     total_tokens INTEGER NOT NULL DEFAULT 0,
@@ -47,6 +48,7 @@ class SQLiteAnalyticsAdapter(AnalyticsDB):
                 for row in connection.execute("PRAGMA table_info(agent_runs)").fetchall()
             }
             missing_columns = {
+                "goal_achieved": "INTEGER NOT NULL DEFAULT 0",
                 "total_nodes": "INTEGER NOT NULL DEFAULT 0",
                 "cached_node_count": "INTEGER NOT NULL DEFAULT 0",
                 "new_node_count": "INTEGER NOT NULL DEFAULT 0",
@@ -107,10 +109,11 @@ class SQLiteAnalyticsAdapter(AnalyticsDB):
                     global_goal,
                     started_at,
                     status,
+                    goal_achieved,
                     total_prompt_tokens,
                     total_completion_tokens,
                     total_tokens
-                ) VALUES (?, ?, ?, ?, 'running', 0, 0, 0)
+                ) VALUES (?, ?, ?, ?, 'running', 0, 0, 0, 0)
                 """,
                 (run_id, initial_prompt, global_goal, self._to_iso(started_at)),
             )
@@ -194,5 +197,17 @@ class SQLiteAnalyticsAdapter(AnalyticsDB):
                     int(new_node_count),
                     run_id,
                 ),
+            )
+            connection.commit()
+
+    def mark_goal_achieved(self, run_id: str, goal_achieved: bool = True) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                """
+                UPDATE agent_runs
+                SET goal_achieved = ?
+                WHERE run_id = ?
+                """,
+                (1 if goal_achieved else 0, run_id),
             )
             connection.commit()

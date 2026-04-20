@@ -29,6 +29,7 @@ class PromptRequest(BaseModel):
 
 class AgentResponse(BaseModel):
     context: Optional[dict]
+    global_goal_answer: Optional[str]
 
 
 class ToolSpecResponse(BaseModel):
@@ -89,7 +90,10 @@ async def call_agent(
 
     await loop_run_cycle(agent_session=agent_session)
     
-    return AgentResponse(context=context_to_dict(agent_session.context))
+    return AgentResponse(
+        context=context_to_dict(agent_session.context),
+        global_goal_answer=agent_session.global_goal_answer,
+    )
 
 
 @router.get("/tools/{tool_name}", response_model=ToolSpecResponse)

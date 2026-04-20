@@ -12,6 +12,20 @@ from agent.logger import get_logger
 logger = get_logger(__name__)
 
 
+def _parse_goal_achieved(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "yes", "1"}:
+            return True
+        if normalized in {"false", "no", "0", ""}:
+            return False
+    return False
+
+
 def has_ancestor_in_set(node: Node, ancestor_ids: set[str]) -> bool:
     current = node.parent
     while current is not None:
@@ -94,7 +108,19 @@ def clean_reflected_context(context: Context) -> None:
                 node.node_type = NodeType.abstract
 
 
+def enforce_pending_status_for_persistence(context: Context) -> None:
+    """Last-mile safety check before writing procedural memory.
+
+    Reflection should always persist reusable procedures as pending so they can
+    be executed in a future run.
+    """
+    context.rebuild_indexes()
+    for node in context.node_index.values():
+        node.node_status = NodeStatus.pending
+
+
 def save_distilled_procedural(agent_session: Agent, procedural_context: Context) -> dict[str, int]:
+    enforce_pending_status_for_persistence(procedural_context)
     procedural_context.rebuild_indexes()
 
     abstract_nodes: list[Node] = []
@@ -104,6 +130,7 @@ def save_distilled_procedural(agent_session: Agent, procedural_context: Context)
                 abstract_nodes.append(node)
 
     if not abstract_nodes:
+        enforce_pending_status_for_persistence(procedural_context)
         metadata = agent_session.memory.save(context=procedural_context, memory_type="procedural")
         saved_nodes = int((metadata or {}).get("nodes_value", 0))
         saved_subtrees = len(procedural_context.roots) if saved_nodes > 0 else 0
@@ -143,6 +170,7 @@ def save_distilled_procedural(agent_session: Agent, procedural_context: Context)
         subtree_root = clone_subtree(node)
         subtree_root.parent = None
         subtree_context = Context(roots=[subtree_root])
+        enforce_pending_status_for_persistence(subtree_context)
         metadata = agent_session.memory.save(context=subtree_context, memory_type="procedural")
         saved += 1
         handled_abstract_ids.add(node_id)
@@ -196,6 +224,28 @@ async def reflect(agent_session: Agent):
         reflection_payload = json.loads(result)
     except json.JSONDecodeError as exc:
         raise ValueError(f"Reflection LLM did not return valid JSON: {result}") from exc
+
+    if not isinstance(reflection_payload, dict):
+        raise ValueError("Reflection result must be a JSON object")
+
+    goal_achieved = _parse_goal_achieved(reflection_payload.get("goal_achieved", False))
+    global_goal_answer = reflection_payload.get("global_goal_answer")
+
+    if goal_achieved:
+        if isinstance(global_goal_answer, str) and global_goal_answer.strip():
+            agent_session.global_goal_answer = global_goal_answer.strip()
+        else:
+            # Keep explicit empty answer instead of stale value from prior runs.
+            agent_session.global_goal_answer = ""
+
+        if agent_session.analytics:
+            agent_session.analytics.mark_goal_achieved(
+                run_id=agent_session.run_id,
+                goal_achieved=True,
+            )
+    else:
+        logger.info("Reflection indicates global goal not achieved; skipping procedural persistence")
+        return None
 
     procedural_context = agent_session.planner.serializer.deserialize_context(reflection_payload)
     if procedural_context is None:

@@ -72,6 +72,18 @@ class ChromadbAdapter(Memory):
         summary_docs = [d for d in (summary_rows.get("documents") or []) if isinstance(d, str) and d.strip()]
         summary_text = summary_docs[0] if summary_docs else base_metadata.get("tool_summary")
 
+        raw_tool_args = base_metadata.get("tool_args")
+        parsed_tool_args: Dict[str, Any] | None = None
+        if isinstance(raw_tool_args, dict):
+            parsed_tool_args = raw_tool_args
+        elif isinstance(raw_tool_args, str) and raw_tool_args.strip():
+            try:
+                loaded_tool_args = json.loads(raw_tool_args)
+                if isinstance(loaded_tool_args, dict):
+                    parsed_tool_args = loaded_tool_args
+            except json.JSONDecodeError:
+                parsed_tool_args = None
+
         precondition_rows = preconditions_collection.get(
             where={"id": node_id}, include=["documents", "metadatas"]
         )
@@ -92,6 +104,7 @@ class ChromadbAdapter(Memory):
             "cached": bool(base_metadata.get("cached", False)),
             "created_at": base_metadata.get("created_at"),
             "tool_name": base_metadata.get("tool_name"),
+            "tool_args": parsed_tool_args,
             "annotation": base_metadata.get("annotation") or "",
             "tool_response_summary": summary_text,
             "preconditions": precondition_docs,

@@ -42,3 +42,7 @@ class AnalyticsDB(ABC):
         status: str = "completed",
     ) -> None:
         ...
+
+    @abstractmethod
+    def mark_goal_achieved(self, run_id: str, goal_achieved: bool = True) -> None:
+        ...

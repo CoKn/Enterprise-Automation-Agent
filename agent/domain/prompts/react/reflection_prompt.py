@@ -7,6 +7,8 @@ CRITICAL SCOPE RULES:
 - Use ONLY successful tool invocations provided in the input as reflection evidence.
 - Never include failed tool invocations in the resulting procedural tree.
 - Never fabricate tool names, arguments, IDs, or outcomes.
+- Include ONLY nodes that contributed to achieving the global goal.
+- Exclude exploratory, redundant, or non-causal nodes that did not materially help achieve the global goal.
 
 STABILITY JUDGMENT RULES FOR tool_args:
 - Stable arguments: values reusable across many runs in similar environments.
@@ -38,9 +40,14 @@ Entire Context Tree (full trace, for structure and dependency understanding):
 
 OUTPUT REQUIREMENTS:
 - Return valid JSON only.
-- Return exactly one top-level key: root
-- root must be a Node-like tree.
+- Return exactly these top-level keys: goal_achieved, global_goal_answer, root.
+- goal_achieved must be a boolean.
+- global_goal_answer must be a concise string when goal_achieved=true, otherwise null.
+- When goal_achieved=true, global_goal_answer must directly answer the question/value of the global goal node (root node value).
+- root must be a Node-like tree only when goal_achieved=true; set root=null when goal_achieved=false.
 - Do not include markdown code fences.
+- For every node in the tree, node_status must be exactly "pending".
+- Never output "success" or "failed" for node_status in reflected output.
 
 Each node should include these properties:
 - value
@@ -55,9 +62,11 @@ Each node should include these properties:
 
 Output JSON schema shape:
 {
+	"goal_achieved": true,
+	"global_goal_answer": "...",
 	"root": {
 		"value": "...",
-		"node_status": "pending|success|failed",
+		"node_status": "pending",
 		"node_type": "abstract|parcially_planned|fully_planned",
 		"preconditions": ["..."],
 		"effects": ["..."],
@@ -67,4 +76,14 @@ Output JSON schema shape:
 		"children": [ ...same node schema... ]
 	}
 }
+
+When goal is NOT achieved, return:
+{
+	"goal_achieved": false,
+	"global_goal_answer": null,
+	"root": null
+}
+
+STATUS CONSTRAINT (RECURSIVE):
+- The root node and all descendants must have node_status = "pending".
 """.strip()
