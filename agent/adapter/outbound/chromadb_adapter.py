@@ -148,7 +148,14 @@ class ChromadbAdapter(Memory):
         if not root_dict:
             return Context()
 
-        return context_from_dict(root_dict)
+        context = context_from_dict(root_dict)
+        context.rebuild_indexes()
+
+        # Nodes reconstructed from memory are reused nodes.
+        for node in context.node_index.values():
+            node.cached = True
+
+        return context
 
     def save(self, context: Context, memory_type: str = "episodic"):
         nodes_value = self.client.get_or_create_collection(name="nodes_value")

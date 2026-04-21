@@ -10,5 +10,5 @@ class Memory(ABC):
         ...
 
     @abstractmethod
-    def query(self, goal: str, filter: dict | None = None, memory_type: str | None = None):
+    def query(self, goal: str, filter: dict | None = None, memory_type: str | None = None) -> Context | None:
         ...

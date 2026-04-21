@@ -25,7 +25,7 @@ class Node:
 	next: Optional[Node]
 	previous: Optional[Node]
 
-	status: NodeStatus  # one of: "pending", "completed", "failed"
+	status: NodeStatus  # one of: "pending", "success", "failed"
 	created_at: datetime
 
 INPUT YOU WILL RECEIVE (as JSON user prompt):
@@ -36,7 +36,7 @@ INPUT YOU WILL RECEIVE (as JSON user prompt):
 For JSON output:
 - Use strings for enum fields:
 	- NodeType: "abstract", "parcially_planned", "fully_planned".
-	- NodeStatus: "pending", "completed", "failed".
+	- NodeStatus: "pending", "success", "failed".
 - Set fields that are filled in later by the agent to null:
 	- id, parent, next, previous, created_at, tool_response, tool_response_summary.
 - Always include children as an array (empty list for leaves).

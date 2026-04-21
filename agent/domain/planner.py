@@ -7,6 +7,7 @@ from agent.logger import get_logger
 
 from agent.domain.context import Node, Context
 from agent.domain.context import NodeStatus
+from agent.domain.prompts.planner.extension_planning_prompt import EXTENSION_PLANNING_PROMPT
 from agent.domain.prompts.planner.planning_prompt import PLANNING_PROMPT
 from agent.domain.prompts.planner.replanning_prompt import REPLANNING_PROMPT
 
@@ -84,6 +85,61 @@ class Planner:
             raise ValueError(f"Planner LLM did not return valid JSON: {result}")
 
         return context_result, llm_result
+
+    def extend_plan(self, root: Node, context: Context, tool_docs: str = "", run_id: str | None = None):
+        system_prompt = EXTENSION_PLANNING_PROMPT.format(tool_docs=tool_docs)
+
+        root_payload = self.serializer.serialize_node(root)
+        context_payload = self.serializer.serialize_context(context)
+
+        user_payload = {
+            "goal": root.value,
+            "extension_root": root_payload,
+            "context": context_payload,
+        }
+
+        logger.info(
+            "Extend userpayload: goal='%(goal)s' extension_root=%(extension_root)s context=%(context)s",
+            user_payload,
+        )
+
+        llm_result = self.llm.call(
+            prompt=json.dumps(user_payload),
+            system_prompt=system_prompt,
+            json_mode=True,
+        )
+
+        if llm_result.get("error"):
+            raise RuntimeError(llm_result["error"])
+
+        result: str = llm_result.get("response") or ""
+
+        logger.info(
+            "LLM usage phase=extend_plan prompt_tokens=%s completion_tokens=%s total_tokens=%s",
+            llm_result.get("prompt_tokens", 0),
+            llm_result.get("completion_tokens", 0),
+            llm_result.get("total_tokens", 0),
+        )
+
+        logger.info(
+            "Extend response: resp='%s'",
+            result,
+        )
+
+        try:
+            extension_payload = json.loads(result)
+            extension_context = self.serializer.deserialize_context(extension_payload)
+            if extension_context is None:
+                raise ValueError("Planner extension produced an empty context")
+
+            extension_root = extension_context.get_root()
+            if extension_root is None:
+                raise ValueError("Planner extension produced no root")
+
+        except json.JSONDecodeError:
+            raise ValueError(f"Planner extension did not return valid JSON: {result}")
+
+        return extension_root, llm_result
 
 
     def replan(self, root: Node, context: Context, tool_docs: str = "", run_id: str | None = None):

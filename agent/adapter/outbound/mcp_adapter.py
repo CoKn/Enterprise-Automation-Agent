@@ -106,6 +106,10 @@ class MCPAdapter(Tools):
             {"name": rt.namespaced_name, "description": rt.description, "input_schema": rt.input_schema,  "server_id": rt.server_id, "mcp_name": rt.mcp_name}
             for rt in self._tools.values()
         ]
+        # TODO: remove later
+        # notion_search_spec = next((tool for tool in payload if tool["name"] == "Notion.notion-search"), None)
+        # if notion_search_spec is not None:
+        #     logger.info("MCP tool spec for LLM: %s", json.dumps(notion_search_spec, ensure_ascii=False))
         return json.dumps(payload, ensure_ascii=False)
 
     def get_pending_oauth_urls(self):
@@ -113,13 +117,14 @@ class MCPAdapter(Tools):
 
     def get_tool_spec(self, tool_name: str):
         rt = self._tools[tool_name]
-        return {
+        spec = {
             "name": rt.namespaced_name,
             "description": rt.description,
             "input_schema": rt.input_schema,
             "server_id": rt.server_id,
             "mcp_name": rt.mcp_name,
         }
+        return spec
 
     async def execute_tool(self, fn_name, fn_args):
         rt = self._tools[fn_name]

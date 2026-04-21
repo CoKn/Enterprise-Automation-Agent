@@ -3,6 +3,7 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum, auto
+import json
 from typing import Optional, Self, Dict, Set, Any
 from uuid import UUID, uuid4
 
@@ -11,6 +12,7 @@ class NodeStatus(Enum):
     pending = auto()
     success = auto()
     failed = auto()
+    completed = auto()
 
 
 class NodeType(Enum):
@@ -124,6 +126,84 @@ class Context:
         self.roots.append(root)
         self.rebuild_indexes()
 
+    def replace_node_with_subtree(self, target_node: "Node", replacement_root: "Node") -> None:
+        if target_node is None or replacement_root is None:
+            return
+
+        self.rebuild_indexes()
+
+        target = self.get_node(target_node.id)
+        if target is None:
+            return
+
+        parent = target.parent
+        old_previous = target.previous
+        old_next = target.next
+
+        if parent is not None:
+            siblings = parent.children
+            index = next((i for i, node in enumerate(siblings) if node.id == target.id), -1)
+            if index < 0:
+                return
+            siblings[index] = replacement_root
+        else:
+            index = next((i for i, root in enumerate(self.roots) if root.id == target.id), -1)
+            if index < 0:
+                return
+            self.roots[index] = replacement_root
+
+        replacement_root.parent = parent
+        replacement_root.previous = old_previous
+        replacement_root.next = old_next
+
+        if old_previous is not None:
+            previous_node = self.get_node(old_previous)
+            if previous_node is not None:
+                previous_node.next = replacement_root.id
+
+        if old_next is not None:
+            next_node = self.get_node(old_next)
+            if next_node is not None:
+                next_node.previous = replacement_root.id
+
+        self.rebuild_indexes()
+
+    def extend_node_with_subtree(self, target_node: "Node", extension_root: "Node") -> int:
+        if target_node is None or extension_root is None:
+            return 0
+
+        self.rebuild_indexes()
+        target = self.get_node(target_node.id)
+        if target is None:
+            return 0
+
+        additions = extension_root.children if extension_root.children else [extension_root]
+
+        def key(node: "Node") -> str:
+            tool_args = node.tool_args if isinstance(node.tool_args, dict) else None
+            return json.dumps(
+                [node.value, node.node_type.name, node.tool_name, tool_args],
+                sort_keys=True,
+                default=str,
+            )
+
+        existing_keys = {key(child) for child in target.children}
+        added = 0
+        for child in additions:
+            signature = key(child)
+            if signature in existing_keys:
+                continue
+            child.parent = target
+            target.children.append(child)
+            existing_keys.add(signature)
+            added += 1
+
+        if added > 0:
+            target.node_status = NodeStatus.pending
+            self.rebuild_indexes()
+
+        return added
+
     def get_root(self) -> Optional[Node]:
         if not self.roots:
             return None
@@ -147,7 +227,10 @@ class Context:
                 return None
 
             for candidate in ordered_nodes[idx + 1 :]:
-                if candidate.node_type != NodeType.abstract:
+                if (
+                    candidate.node_type != NodeType.abstract
+                    and candidate.node_status == NodeStatus.pending
+                ):
                     return candidate
             return None
 
@@ -192,6 +275,56 @@ class Context:
             return ordered_nodes[idx + 1 :]
 
         return []
+
+    def select_frontier_node(self, node: Optional[Node]) -> Optional[Node]:
+        if node is None:
+            return None
+
+        self.rebuild_indexes()
+
+        def is_executable(candidate: Node) -> bool:
+            return (
+                candidate.node_type == NodeType.fully_planned
+                and candidate.tool_name is not None
+                and isinstance(candidate.tool_args, dict)
+            )
+
+        def walk(candidate: Node) -> Optional[Node]:
+            if candidate.node_status == NodeStatus.completed:
+                return None
+
+            children = list(candidate.children or [])
+
+            if candidate.node_type == NodeType.abstract and not children:
+                return candidate
+
+            for child in children:
+                frontier = walk(child)
+                if frontier is not None:
+                    return frontier
+
+            if candidate.node_type == NodeType.parcially_planned:
+                return candidate
+
+            if candidate.node_type == NodeType.fully_planned and candidate.node_status == NodeStatus.failed:
+                successor_id = candidate.next
+                visited_successors: Set[UUID] = set()
+                while successor_id is not None and successor_id not in visited_successors:
+                    visited_successors.add(successor_id)
+                    successor = self.get_node(successor_id)
+                    if successor is None:
+                        break
+                    if successor.node_status == NodeStatus.completed:
+                        return None
+                    successor_id = successor.next
+                return candidate
+
+            if is_executable(candidate):
+                return candidate
+
+            return None
+
+        return walk(node)
 
     def _find_root(self, node: Node) -> Optional[Node]:
         current = node

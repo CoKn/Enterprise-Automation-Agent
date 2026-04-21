@@ -1,10 +1,5 @@
 [
   {
-    "id": "Websearch_Scraping",
-    "transport": "streamable-http",
-    "url": "http://localhost:8003/mcp"
-  },
-  {
     "id": "Notion",
     "transport": "streamable-http",
     "url": "https://mcp.notion.com/mcp",

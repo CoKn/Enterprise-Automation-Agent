@@ -120,11 +120,13 @@ CRITICAL EXTRACTION RULES
 OUTPUT FORMAT
 ====================
 
-Return ONLY valid JSON as a dictionary with exactly these five properties:
+Return ONLY valid JSON as a dictionary with exactly these seven properties:
 
 {
   "current_node_id": string,
   "has_error": boolean,
+  "effects_achieved": boolean,
+  "missing_effects": [string],
   "summary": string,
   "parameter_updates": [
     {
@@ -152,6 +154,15 @@ Rules for "current_node_id":
 Rules for "has_error":
 - Set to true when the current tool response indicates an error or failure.
 - Set to false otherwise.
+
+Rules for "effects_achieved":
+- Set to true only if the current node's intended effects were actually achieved.
+- Set to false when the tool ran but did not satisfy the node effects.
+
+Rules for "missing_effects":
+- Provide explicit unmet effects when "effects_achieved" is false.
+- Use concise strings that map to the current node's declared effects.
+- Return [] when all effects were achieved.
 
 Rules for "summary":
 - Use plain text.

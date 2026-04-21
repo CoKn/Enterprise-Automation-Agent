@@ -19,6 +19,7 @@ class Agent:
     active_node: Optional[Node]
     global_goal_node: Optional[Node]
     global_goal_answer: str
+    global_goal_achived: bool = False
     initial_prompt: Optional[str]
     run_started_at: Optional[datetime]
     max_steps: int
@@ -66,6 +67,24 @@ class Agent:
     @property
     def run_id(self) -> str:
         return str(self.id)
+
+    def update_active_node(self) -> Optional[Node]:
+        if not self.context or not self.active_node:
+            self.active_node = None
+            return None
+
+        next_node_id = self.active_node.next
+        if not next_node_id:
+            self.active_node = None
+            return None
+
+        next_node = self.context.get_node(next_node_id)
+        if not next_node:
+            self.active_node = None
+            return None
+
+        self.active_node = next_node
+        return next_node
 
     def start_run(self, initial_prompt: str) -> None:
         self.initial_prompt = initial_prompt

@@ -73,7 +73,7 @@ async def call_agent(
         raise HTTPException(status_code=503, detail="MCP not ready yet")
 
     agent_session = Agent(
-        max_steps=5,
+        max_steps=15,
         tools=tools,
         llm=llm,
         memory=memory,
@@ -86,6 +86,7 @@ async def call_agent(
     agent_session.context = Context(roots=[root_node])
     agent_session.context.rebuild_indexes()
     agent_session.global_goal_node = root_node
+    agent_session.active_node = root_node
     agent_session.start_run(initial_prompt=req.prompt)
 
     await loop_run_cycle(agent_session=agent_session)

@@ -1,9 +1,7 @@
 from agent.domain.agent import Agent
 from agent.domain.context import NodeStatus
 from agent.application.usecases.prompt_rendering import render_prompt
-
 from agent.domain.prompts.react.step_observation import step_observation_prompt
-
 from agent.logger import get_logger
 
 import json
@@ -13,22 +11,21 @@ logger = get_logger(__name__)
 
 
 async def observe(agent_session: Agent):
-
     if not agent_session.active_node:
         return
 
-    # build context for tool response summary
+    node = agent_session.active_node
+
     global_goal = str(agent_session.global_goal_node)
-    previous_nodes_list = agent_session.context.previous_nodes(agent_session.active_node)
-    next_nodes_list = agent_session.context.next_nodes(agent_session.active_node)
+    previous_nodes_list = agent_session.context.previous_nodes(node)
+    next_nodes_list = agent_session.context.next_nodes(node)
 
     previous_nodes = agent_session.context.represent_nodes(nodes=previous_nodes_list)
     next_nodes = agent_session.context.represent_nodes(nodes=next_nodes_list)
-    current_node = agent_session.context.represent_nodes(nodes=[agent_session.active_node])
+    current_node = agent_session.context.represent_nodes(nodes=[node])
     tracked_parameters = agent_session.context.get_leaf_nodes_tool_args()
-    current_tool_response = agent_session.active_node.tool_response
+    current_tool_response = node.tool_response
 
-    # format
     step_observation_prompt_rendered = render_prompt(
         agent_session=agent_session,
         template=step_observation_prompt,
@@ -63,53 +60,43 @@ async def observe(agent_session: Agent):
             llm_result=llm_result,
         )
 
-        response = json.loads(llm_result.get("response") or "")
+        response = json.loads(llm_result.get("response") or "{}")
 
-        agent_session.active_node.tool_response_summary = response.get("summary")
+        node.tool_response_summary = response.get("summary")
 
         parameter_updates = response.get("parameter_updates")
         if isinstance(parameter_updates, list) and parameter_updates:
             agent_session.context.update_parameters(parameter_updates=parameter_updates)
 
-        
-
         if response.get("has_error"):
-            agent_session.active_node.status = NodeStatus.failed
+            node.node_status = NodeStatus.failed
         else:
-            agent_session.active_node.status = NodeStatus.success
+            node.node_status = NodeStatus.completed
 
-
-         # bubble up completion to parents
+        # Recompute parent statuses after the leaf update.
         agent_session.context.recompute_statuses()
 
         metadata = agent_session.memory.save(context=agent_session.context)
         logger.debug("Persisted context metadata: %s", metadata)
         logger.info(
             "Observation summary node=%s: %s",
-            agent_session.active_node.id,
-            agent_session.active_node.tool_response_summary,
+            node.id,
+            node.tool_response_summary,
         )
 
-
-        # stay at failed node for replanning
-        if agent_session.active_node.status == NodeStatus.failed:
+        # Keep failed node as active so the next cycle can replan/repair it.
+        if node.node_status == NodeStatus.failed:
             return
-        
-        # set next active node if a next node exists
-        if (next_node := agent_session.context.next_node(agent_session.active_node)):
-            agent_session.active_node = next_node
-        else:
+
+        # Otherwise move to the next frontier node in the tree.
+        agent_session.active_node = agent_session.context.select_frontier_node(agent_session.global_goal_node)
+        if agent_session.active_node is None:
             agent_session.termination = True
 
     except Exception as e:
-        agent_session.active_node.node_status = NodeStatus.failed
-
-        # bubble up failure status to parents
+        node.node_status = NodeStatus.failed
         agent_session.context.recompute_statuses()
-
-        # update node status in db 
         agent_session.memory.save(context=agent_session.context)
-
         agent_session.termination = True
 
         raise RuntimeError(f"Observation has failed: {e}") from e

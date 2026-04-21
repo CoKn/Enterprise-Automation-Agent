@@ -36,7 +36,7 @@ def has_ancestor_in_set(node: Node, ancestor_ids: set[str]) -> bool:
 
 
 def query_existing_procedural(agent_session: Agent, goal: str) -> Optional[Context]:
-    filter = {"collection": "nodes_value", "n_results": 1, "max_distance": 0.2}
+    filter = {"collection": "nodes_value", "n_results": 5, "max_distance": 0.3}
     return agent_session.memory.query(goal, filter=filter, memory_type="procedural")
 
 
@@ -185,7 +185,7 @@ def save_distilled_procedural(agent_session: Agent, procedural_context: Context)
 
 async def reflect(agent_session: Agent):
     if not agent_session.global_goal_node:
-        return None
+        return False
 
     full_context_tree = agent_session.planner.serializer.serialize_context(agent_session.context)
 
@@ -230,6 +230,7 @@ async def reflect(agent_session: Agent):
 
     goal_achieved = _parse_goal_achieved(reflection_payload.get("goal_achieved", False))
     global_goal_answer = reflection_payload.get("global_goal_answer")
+    agent_session.global_goal_achived = goal_achieved
 
     if goal_achieved:
         if isinstance(global_goal_answer, str) and global_goal_answer.strip():
@@ -245,7 +246,7 @@ async def reflect(agent_session: Agent):
             )
     else:
         logger.info("Reflection indicates global goal not achieved; skipping procedural persistence")
-        return None
+        return False
 
     procedural_context = agent_session.planner.serializer.deserialize_context(reflection_payload)
     if procedural_context is None:
@@ -271,4 +272,4 @@ async def reflect(agent_session: Agent):
         persistence_stats["saved_nodes"],
     )
 
-    return procedural_context
+    return True
