@@ -141,7 +141,7 @@ class MCPAdapter(Tools):
             "is_error": getattr(result, "isError", False),
             "structured": structured,
             "text": "\n".join(texts) if texts else None,
-            "raw": result,
+            # "raw": result,
         }
 
     async def _open_session(self, endpoint: McpEndpointConfig, *, init_timeout_s: float) -> ClientSession:

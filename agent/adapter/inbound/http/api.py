@@ -73,7 +73,7 @@ async def call_agent(
         raise HTTPException(status_code=503, detail="MCP not ready yet")
 
     agent_session = Agent(
-        max_steps=15,
+        max_steps=12,
         tools=tools,
         llm=llm,
         memory=memory,

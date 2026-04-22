@@ -1,18 +1,12 @@
 [
   {
+    "id": "Data_Quality",
+    "transport": "streamable-http",
+    "url": "http://localhost:8030/mcp"
+  },
+  {
     "id": "Notion",
     "transport": "streamable-http",
-    "url": "https://mcp.notion.com/mcp",
-    "auth": {
-      "type": "oauth",
-      "server_url": "https://mcp.notion.com/mcp",
-      "client_metadata": {
-        "client_name": "Neo",
-        "redirect_uris": ["http://127.0.0.1:8090/mcp/oauth/callback"],
-        "grant_types": ["authorization_code", "refresh_token"],
-        "response_types": ["code"],
-        "scope": "user"
-      }
-    }
+    "url": "http://0.0.0.0:8020/mcp"
   }
 ]

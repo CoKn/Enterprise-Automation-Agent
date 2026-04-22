@@ -54,12 +54,12 @@ async def act(agent_session: Agent):
         if isinstance(tool_response, dict) and bool(tool_response.get("is_error")):
             node.node_status = NodeStatus.failed
 
-        logger.debug(
-            "Tool response for %s on node=%s: %s",
-            tool_name,
-            node.id,
-            node.tool_response,
-        )
+        # logger.debug(
+        #     "Tool response for %s on node=%s: %s",
+        #     tool_name,
+        #     node.id,
+        #     node.tool_response,
+        # )
 
         return
 
