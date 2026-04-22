@@ -649,17 +649,12 @@ def get_page(page_id: str) -> dict[str, Any]:
 @mcp.tool()
 def query_rows(
     data_source_id: str,
-    filter: dict[str, Any] | None = None,
-    sorts: list[dict[str, Any]] | None = None,
-    page_size: int = 100,
-    start_cursor: str | None = None,
-    filter_properties: list[str] | None = None,
 ) -> dict[str, Any]:
     """
     Query rows from a Notion data source and return a simplified result shape.
 
     What this tool does:
-    - Queries a Notion data source using optional filter, sort, and pagination.
+    - Queries a Notion data source using default query behavior.
     - Removes most Notion page wrapper noise.
     - Returns only:
         - row id
@@ -668,18 +663,10 @@ def query_rows(
 
     Parameters:
     - data_source_id: Data source reference (UUID, URL, or collection://...).
-    - filter: Optional Notion filter object.
-    - sorts: Optional Notion sort definitions.
-    - page_size: Number of rows to fetch in this page (1-100).
-    - start_cursor: Cursor from a previous response for pagination.
-    - filter_properties: Optional list of property names/ids to reduce returned properties.
 
     Example:
     - query_rows(
             data_source_id="collection://01234567-89ab-cdef-0123-456789abcdef",
-            filter={"property": "Availability", "select": {"equals": "In stock"}},
-            sorts=[{"property": "Price", "direction": "ascending"}],
-            page_size=50,
         )
 
     Returns:
@@ -703,13 +690,14 @@ def query_rows(
         }
     }
     """
+
     raw_response = client.query_rows(
         data_source_id_or_url=data_source_id,
-        filter=filter,
-        sorts=sorts,
-        page_size=page_size,
-        start_cursor=start_cursor,
-        filter_properties=filter_properties,
+        filter=None,
+        sorts=None,
+        page_size=100,
+        start_cursor=None,
+        filter_properties=None,
     )
 
     simplified_results = [

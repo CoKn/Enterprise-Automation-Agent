@@ -321,6 +321,8 @@ class ChromadbAdapter(Memory):
         n_results = 1
         where: Dict[str, Any] | None = None
         max_distance: float | None = None
+        root_only = False
+        prefer_abstract = False
         include: list[str] = ["documents", "metadatas", "distances"]
 
         if filter:
@@ -330,6 +332,8 @@ class ChromadbAdapter(Memory):
             raw_max_distance = filter.get("max_distance")
             if isinstance(raw_max_distance, (int, float)):
                 max_distance = float(raw_max_distance)
+            root_only = bool(filter.get("root_only", False))
+            prefer_abstract = bool(filter.get("prefer_abstract", False))
             raw_where = filter.get("where")
             if isinstance(raw_where, dict):
                 where = raw_where
@@ -357,19 +361,55 @@ class ChromadbAdapter(Memory):
             distances_rows[0] if distances_rows and isinstance(distances_rows[0], list) else []
         )
 
+        candidate_indices = list(range(len(ids)))
+
         if max_distance is not None:
-            first_distance = distances[0] if distances else None
-            if not isinstance(first_distance, (int, float)) or float(first_distance) > max_distance:
+            candidate_indices = [
+                idx
+                for idx in candidate_indices
+                if idx < len(distances)
+                and isinstance(distances[idx], (int, float))
+                and float(distances[idx]) <= max_distance
+            ]
+            if not candidate_indices:
                 return None
 
+        def _meta_for_idx(idx: int) -> dict[str, Any]:
+            if idx < len(metas) and isinstance(metas[idx], dict):
+                return metas[idx]
+            return {}
+
+        if root_only and candidate_indices:
+            root_candidates = [
+                idx
+                for idx in candidate_indices
+                if not _meta_for_idx(idx).get("parent_id")
+            ]
+            if root_candidates:
+                candidate_indices = root_candidates
+
+        if prefer_abstract and candidate_indices:
+            abstract_candidates = [
+                idx
+                for idx in candidate_indices
+                if str(_meta_for_idx(idx).get("type") or "").strip().lower() == "abstract"
+            ]
+            if abstract_candidates:
+                candidate_indices = abstract_candidates
+
+        selected_idx = candidate_indices[0] if candidate_indices else None
+        if selected_idx is None:
+            return None
+
         node_id: str | None = None
-        if metas and isinstance(metas[0], dict):
-            metadata_id = metas[0].get("id")
+        selected_meta = _meta_for_idx(selected_idx)
+        if selected_meta:
+            metadata_id = selected_meta.get("id")
             if metadata_id:
                 node_id = str(metadata_id)
 
-        if not node_id and ids:
-            node_id = str(ids[0]).split(":")[0]
+        if not node_id and selected_idx < len(ids):
+            node_id = str(ids[selected_idx]).split(":")[0]
 
         if not node_id:
             return None

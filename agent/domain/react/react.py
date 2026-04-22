@@ -71,6 +71,8 @@ async def loop_run_cycle(agent_session: Agent) -> Context:
                 completed = True
                 return agent_session.context
 
+            return agent_session.context
+
             # reflect says goal is not achieved; stop only if budget is exhausted
             if agent_session.step_counter >= agent_session.max_steps:
                 agent_session.termination = True

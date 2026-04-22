@@ -28,7 +28,7 @@ class PromptRequest(BaseModel):
 
 
 class AgentResponse(BaseModel):
-    context: Optional[dict]
+    context: Optional[dict[str, Any] | list[dict[str, Any]]]
     global_goal_answer: Optional[str]
 
 
@@ -73,7 +73,7 @@ async def call_agent(
         raise HTTPException(status_code=503, detail="MCP not ready yet")
 
     agent_session = Agent(
-        max_steps=12,
+        max_steps=10,
         tools=tools,
         llm=llm,
         memory=memory,

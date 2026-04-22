@@ -36,7 +36,13 @@ def has_ancestor_in_set(node: Node, ancestor_ids: set[str]) -> bool:
 
 
 def query_existing_procedural(agent_session: Agent, goal: str) -> Optional[Context]:
-    filter = {"collection": "nodes_value", "n_results": 5, "max_distance": 0.3}
+    filter = {
+        "collection": "nodes_value",
+        "n_results": 10,
+        "max_distance": 0.55,
+        "root_only": True,
+        "prefer_abstract": True,
+    }
     return agent_session.memory.query(goal, filter=filter, memory_type="procedural")
 
 
@@ -183,6 +189,35 @@ def save_distilled_procedural(agent_session: Agent, procedural_context: Context)
     }
 
 
+def count_runtime_reused_subtrees(runtime_context: Context) -> int:
+    """Count reused abstract subtrees from the executed runtime context.
+
+    A subtree is considered reused when its root abstract node is marked cached.
+    Nested cached abstract nodes are not double-counted.
+    """
+    runtime_context.rebuild_indexes()
+
+    reused_roots: set[str] = set()
+
+    for root in runtime_context.roots:
+        for node in runtime_context.bfs_nodes(root):
+            if node.node_type != NodeType.abstract or not node.cached:
+                continue
+
+            current = node.parent
+            has_cached_abstract_ancestor = False
+            while current is not None:
+                if current.node_type == NodeType.abstract and current.cached:
+                    has_cached_abstract_ancestor = True
+                    break
+                current = current.parent
+
+            if not has_cached_abstract_ancestor:
+                reused_roots.add(str(node.id))
+
+    return len(reused_roots)
+
+
 async def reflect(agent_session: Agent):
     if not agent_session.global_goal_node:
         return False
@@ -262,6 +297,12 @@ async def reflect(agent_session: Agent):
     persistence_stats = save_distilled_procedural(
         agent_session=agent_session,
         procedural_context=procedural_context,
+    )
+
+    runtime_reused_subtrees = count_runtime_reused_subtrees(agent_session.context)
+    persistence_stats["reused_subtrees"] = max(
+        persistence_stats["reused_subtrees"],
+        runtime_reused_subtrees,
     )
 
     logger.info(

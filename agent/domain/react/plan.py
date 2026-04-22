@@ -120,7 +120,13 @@ async def plan(agent_session: Agent):
         return
 
     # if node type is abstract check if active node is already in procedural memory
-    filter_ = {"collection": "nodes_value", "n_results": 5, "max_distance": 0.3}
+    filter_ = {
+        "collection": "nodes_value",
+        "n_results": 10,
+        "max_distance": 0.55,
+        "root_only": True,
+        "prefer_abstract": True,
+    }
     existing_plan: Context | None  = agent_session.memory.query(
         agent_session.active_node.value,
         filter=filter_,
