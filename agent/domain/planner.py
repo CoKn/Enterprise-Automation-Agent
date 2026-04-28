@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 # planner for generating new planns
 import json
 from uuid import uuid4
@@ -5,11 +7,17 @@ from typing import Optional
 
 from agent.logger import get_logger
 
-from agent.domain.context import Node, Context
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from agent.domain.agent import Agent
 from agent.domain.context import NodeStatus
-from agent.domain.prompts.planner.extension_planning_prompt import EXTENSION_PLANNING_PROMPT
-from agent.domain.prompts.planner.planning_prompt import PLANNING_PROMPT
-from agent.domain.prompts.planner.replanning_prompt import REPLANNING_PROMPT
+
+from agent.domain.prompt_rendering import (
+    build_planning_prompt,
+    build_replanning_prompt,
+    build_plan_extention_prompt,
+)
 
 from agent.application.ports.outbound.llm_interface import LLM
 from agent.application.ports.outbound.context_serializer_interface import ContextSerializer
@@ -27,31 +35,11 @@ class Planner:
         self.serializer = serializer
         self.analytics = analytics
 
-    def plan(self, root: Node, context: Context, tool_docs: str = "", run_id: str | None = None):
+    def plan(self, prompt: str):
 
-        # 1. load planning prompt and format prompt (takes: root node, tool specs, context (for episodic memory and previous nodes))
-        system_prompt = PLANNING_PROMPT.format(tool_docs=tool_docs)
-
-        # 2. serialize root and context and create payload
-        root_payload = self.serializer.serialize_node(root)
-
-        context_payload = self.serializer.serialize_context(context)
-
-        user_payload = {
-            "goal": root.value,
-            "root": root_payload,
-            "context": context_payload,
-        }
-
-        logger.info(
-            "Userpayload: goal='%(goal)s' root=%(root)s context=%(context)s",
-            user_payload,
-        )
-
-        # 3. send prompt to LLM
+        # 1. send prompt to LLM (single combined prompt string)
         llm_result = self.llm.call(
-            prompt=json.dumps(user_payload),
-            system_prompt=system_prompt,
+            prompt=prompt,
             json_mode=True,
         )
 
@@ -86,26 +74,11 @@ class Planner:
 
         return context_result, llm_result
 
-    def extend_plan(self, root: Node, context: Context, tool_docs: str = "", run_id: str | None = None):
-        system_prompt = EXTENSION_PLANNING_PROMPT.format(tool_docs=tool_docs)
 
-        root_payload = self.serializer.serialize_node(root)
-        context_payload = self.serializer.serialize_context(context)
-
-        user_payload = {
-            "goal": root.value,
-            "extension_root": root_payload,
-            "context": context_payload,
-        }
-
-        logger.info(
-            "Extend userpayload: goal='%(goal)s' extension_root=%(extension_root)s context=%(context)s",
-            user_payload,
-        )
+    def extend_plan(self, prompt: str):
 
         llm_result = self.llm.call(
-            prompt=json.dumps(user_payload),
-            system_prompt=system_prompt,
+            prompt=prompt,
             json_mode=True,
         )
 
@@ -142,29 +115,12 @@ class Planner:
         return extension_root, llm_result
 
 
-    def replan(self, root: Node, context: Context, tool_docs: str = "", run_id: str | None = None):
-        # 1. load replanning prompt and format with available tools
-        system_prompt = REPLANNING_PROMPT.format(tool_docs=tool_docs)
-
-        # 2. serialize failed root and full context
-        root_payload = self.serializer.serialize_node(root)
-        context_payload = self.serializer.serialize_context(context)
-
-        user_payload = {
-            "goal": root.value,
-            "failed_node": root_payload,
-            "context": context_payload,
-        }
-
-        logger.info(
-            "Replan userpayload: goal='%(goal)s' failed_node=%(failed_node)s context=%(context)s",
-            user_payload,
-        )
+    # TODO: fix this function
+    def replan(self, prompt: str):
 
         # 3. send prompt to LLM
         llm_result = self.llm.call(
-            prompt=json.dumps(user_payload),
-            system_prompt=system_prompt,
+            prompt=prompt,
             json_mode=True,
         )
 
@@ -207,6 +163,10 @@ class Planner:
             insertion_node.cached = False
             insertion_node.tool_response = None
             insertion_node.tool_response_summary = None
+
+            # derive local context/root from agent_session
+            root = agent_session.active_node
+            context = agent_session.context
 
             failed_node = context.get_node(root.id) or root
             parent = failed_node.parent

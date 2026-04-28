@@ -6,6 +6,7 @@ from enum import Enum, auto
 import json
 from typing import Optional, Self, Dict, Set, Any
 from uuid import UUID, uuid4
+from agent.application.usecases.prompt_rendering import render_prompt
 
 
 class NodeStatus(Enum):
@@ -451,4 +452,3 @@ class Context:
             )
 
         return tracked_parameters
-        

@@ -1,4 +1,4 @@
-step_observation_prompt = """
+STEP_OBSERVATION_PROMP = """
 You are observing the execution of a single tool call that is part of a larger, structured plan.
 Your job is not only to summarize what happened, but also to extract and preserve any concrete
 values that may be needed by later planned tool calls.

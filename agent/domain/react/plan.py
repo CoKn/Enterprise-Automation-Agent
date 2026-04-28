@@ -1,7 +1,9 @@
 from agent.domain.agent import Agent
 from agent.domain.context import Context, NodeType, NodeStatus
-from agent.application.usecases.prompt_rendering import render_prompt
-from agent.domain.prompts.react.parameter_generation import parameter_generation_prompt
+from agent.domain.prompt_rendering import (build_parameter_generation_prompt,
+                                           build_plan_extention_prompt,
+                                           build_planning_prompt
+                                           )
 
 from agent.logger import get_logger
 
@@ -10,6 +12,7 @@ import json
 
 logger = get_logger(__name__)
 
+# TODO: double check this
 def _mark_subtree_cached(node):
     stack = [node]
     while stack:
@@ -18,32 +21,11 @@ def _mark_subtree_cached(node):
         stack.extend(current.children or [])
 
 
+# generate parameters for parcially planned node
 async def plan_parameters(agent_session: Agent):
 
-    # build parameter generation prompt
-    previous_nodes_list = agent_session.context.previous_nodes(agent_session.active_node)
-    next_nodes_list = agent_session.context.next_nodes(agent_session.active_node)
-
-    previous_nodes = agent_session.context.represent_nodes(nodes=previous_nodes_list)
-    next_nodes = agent_session.context.represent_nodes(nodes=next_nodes_list)
-    current_node = agent_session.context.represent_nodes(nodes=[agent_session.active_node])
-
-    tool_spec = agent_session.tools.get_tool_spec(agent_session.active_node.tool_name)
-
-    parameter_generation_prompt_rendered = render_prompt(
-        agent_session=agent_session,
-        template=parameter_generation_prompt,
-        context={
-            "global_goal": agent_session.global_goal_node.value,
-            "current_node": current_node,
-            "tool_spec": tool_spec,
-            "history": previous_nodes,
-            "future_nodes": next_nodes,
-        },
-    )
-
     llm_result = agent_session.llm.call(
-        prompt=parameter_generation_prompt_rendered,
+        prompt=build_parameter_generation_prompt(agent_session=agent_session),
         json_mode=True,
     )
 
@@ -100,13 +82,10 @@ async def plan(agent_session: Agent):
     # TODO: put this into own function
     # case: agent plan didn't worked and needs a new plan for prgressing
     if agent_session.active_node.node_type == NodeType.abstract and agent_session.active_node.children:
-        tool_docs = await agent_session.tools.get_tools_json()
 
+        prompt = build_plan_extention_prompt(agent_session=agent_session),
         extension_root, llm_result = agent_session.planner.extend_plan(
-            context=agent_session.context,
-            root=agent_session.active_node,
-            tool_docs=tool_docs,
-            run_id=agent_session.run_id,
+            prompt=prompt,
         )
 
         agent_session.record_llm_usage(
@@ -193,20 +172,14 @@ async def plan(agent_session: Agent):
             inserted_root.cached,
         )
 
-        # TODO: remove later
-        serialized_context = agent_session.planner.serializer.serialize_context(agent_session.context)
-        logger.info("%s:\n%s", "Context Tree", json.dumps(serialized_context, indent=2, default=str))
-
     # no existing path available so we expand the node
     else:
-        tool_docs = await agent_session.tools.get_tools_json()
+
+        prompt = build_planning_prompt(agent_session=agent_session)
 
         # generate plan
         agent_session.context, llm_result = agent_session.planner.plan(
-            context=agent_session.context,
-            root=agent_session.active_node,
-            tool_docs=tool_docs,
-            run_id=agent_session.run_id,
+            prompt==prompt
         )
 
         # write usage to analytics db
@@ -239,13 +212,10 @@ async def replan(agent_session: Agent):
 
     # get failed node, tool specs
     failed_node = agent_session.active_node
-    tool_docs = await agent_session.tools.get_tools_json()
 
     # send request to llm
     agent_session.context, llm_result = agent_session.planner.replan(
-        context=agent_session.context,
-        root=failed_node,
-        tool_docs=tool_docs,
+        agent_session=agent_session,
         run_id=agent_session.run_id,
     )
 

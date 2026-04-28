@@ -5,7 +5,7 @@ from typing import Optional
 from agent.application.usecases.prompt_rendering import render_prompt
 from agent.domain.agent import Agent
 from agent.domain.context import Context, Node, NodeType, NodeStatus
-from agent.domain.prompts.react.reflection_prompt import REFLECTION_PROMPT
+from agent.domain.prompt_rendering import build_reflection_prompt
 from agent.logger import get_logger
 
 
@@ -222,19 +222,8 @@ async def reflect(agent_session: Agent):
     if not agent_session.global_goal_node:
         return False
 
-    full_context_tree = agent_session.planner.serializer.serialize_context(agent_session.context)
-
-    reflection_prompt_rendered = render_prompt(
-        agent_session=agent_session,
-        template=REFLECTION_PROMPT,
-        context={
-            "global_goal": agent_session.global_goal_node.value,
-            "full_context_tree": json.dumps(full_context_tree),
-        },
-    )
-
     llm_result = agent_session.llm.call(
-        prompt=reflection_prompt_rendered,
+        prompt=build_reflection_prompt(agent_session=agent_session),
         json_mode=True,
     )
 

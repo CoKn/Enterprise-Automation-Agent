@@ -227,6 +227,24 @@ Before writing JSON, silently check:
 6. Did you stop decomposition once at least one solid executable next step was exposed, instead of over-planning every branch?
 
 ==================================================
+AVAILABLE TOOLS
+==================================================
+
+{tool_docs}
+
+==================================================
+CURRENT PLANNING CONTEXT
+==================================================
+
+Goal: {goal}
+
+Root Node:
+{root}
+
+Execution Context:
+{context}
+
+==================================================
 RESPONSE FORMAT
 ==================================================
 
@@ -273,7 +291,4 @@ STRUCTURAL REQUIREMENTS
 - Never use placeholders in tool_args
 - The first actionable leaf in document order should be the best executable next step
 - If no executable leaf can be produced without guessing, return an abstract subtree that makes progress toward one
-
-Available Tools:
-{tool_docs}
 """

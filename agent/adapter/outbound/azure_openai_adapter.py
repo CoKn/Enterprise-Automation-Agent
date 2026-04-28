@@ -20,7 +20,7 @@ class AzureOpenAIAdapter(LLM, BaseModel):
             api_version=self.api_version
         )
 
-    @traceable(project_name="MasterThesis2026")
+    @traceable(project_name="MasterThesis2026", run_type="llm")
     def call(self, prompt, system_prompt: str = "You are a helpfull assistant.", json_mode: bool=False, max_tokens: int=16384, temperature: int=0, top_p: int=1) -> dict[str, Any]:
         if json_mode:
             response_type = 'json_object'
