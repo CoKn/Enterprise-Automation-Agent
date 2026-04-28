@@ -7,17 +7,8 @@ from typing import Optional
 
 from agent.logger import get_logger
 
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from agent.domain.agent import Agent
 from agent.domain.context import NodeStatus
 
-from agent.domain.prompt_rendering import (
-    build_planning_prompt,
-    build_replanning_prompt,
-    build_plan_extention_prompt,
-)
 
 from agent.application.ports.outbound.llm_interface import LLM
 from agent.application.ports.outbound.context_serializer_interface import ContextSerializer

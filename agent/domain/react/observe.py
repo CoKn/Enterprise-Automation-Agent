@@ -17,7 +17,7 @@ async def observe(agent_session: Agent):
     try:
         llm_result = agent_session.llm.call(
             json_mode=True,
-            prompt=build_obervation_prompt(agent_session=Agent),
+            prompt=build_obervation_prompt(agent_session=agent_session),
         )
 
         if llm_result.get("error"):
