@@ -20,6 +20,7 @@ class ChromadbAdapter(Memory):
         "nodes_preconditions",
         "nodes_effects",
     }
+    _KNOWN_MEMORY_TYPES = {"episodic", "procedural", "semantic"}
 
     def __init__(
         self,
@@ -29,6 +30,17 @@ class ChromadbAdapter(Memory):
         super().__init__()
         resolved_path = os.getenv("CHROMADB") or path or "data"
         self.client = chromadb.PersistentClient(path=resolved_path, settings=client_settings)
+
+    def _normalize_goal(self, text: str) -> str:
+        return " ".join(text.strip().lower().split())
+
+    def _merge_where(self, *clauses: dict | None) -> dict | None:
+        parts = [clause for clause in clauses if clause]
+        if not parts:
+            return None
+        if len(parts) == 1:
+            return parts[0]
+        return {"$and": parts}
 
     def _materialized_path(self, node_id: str, parent_lookup: Dict[str, Optional[str]]) -> str:
         lineage: list[str] = []
@@ -50,14 +62,38 @@ class ChromadbAdapter(Memory):
         candidate = str(candidate).strip()
         return candidate if candidate in self._COLLECTIONS else None
 
-    def _build_node_dict_from_metadata(self, node_id: str) -> Dict[str, Any] | None:
+    def _extract_node_id_from_record_id(self, record_id: str) -> str:
+        raw_id = str(record_id)
+        parts = raw_id.split(":")
+
+        # New composite IDs are namespaced as: <memory_type>:<node_id>[:kind[:position]].
+        if len(parts) >= 2 and parts[0] in self._KNOWN_MEMORY_TYPES:
+            return parts[1]
+
+        # Backward compatibility with older IDs like <node_id>:summary.
+        return parts[0]
+
+    def _build_node_dict_from_metadata(
+        self,
+        node_id: str,
+        memory_type: str | None = None,
+    ) -> Dict[str, Any] | None:
         """Build a single node dict from database metadata."""
         value_collection = self.client.get_or_create_collection(name="nodes_value")
         summary_collection = self.client.get_or_create_collection(name="nodes_summary")
         preconditions_collection = self.client.get_or_create_collection(name="nodes_preconditions")
         effects_collection = self.client.get_or_create_collection(name="nodes_effects")
 
-        value_rows = value_collection.get(where={"id": node_id}, include=["documents", "metadatas"])
+        node_where: Dict[str, Any] | None = {"id": node_id}
+        if memory_type:
+            node_where = {
+                "$and": [
+                    {"id": node_id},
+                    {"memory_type": memory_type},
+                ]
+            }
+
+        value_rows = value_collection.get(where=node_where, include=["documents", "metadatas"])
         value_docs = value_rows.get("documents") or []
         value_metas = value_rows.get("metadatas") or []
 
@@ -66,9 +102,7 @@ class ChromadbAdapter(Memory):
 
         base_metadata = value_metas[0] if value_metas and isinstance(value_metas[0], dict) else {}
 
-        summary_rows = summary_collection.get(
-            where={"id": node_id}, include=["documents", "metadatas"]
-        )
+        summary_rows = summary_collection.get(where=node_where, include=["documents", "metadatas"])
         summary_docs = [d for d in (summary_rows.get("documents") or []) if isinstance(d, str) and d.strip()]
         summary_text = summary_docs[0] if summary_docs else base_metadata.get("tool_summary")
 
@@ -84,16 +118,12 @@ class ChromadbAdapter(Memory):
             except json.JSONDecodeError:
                 parsed_tool_args = None
 
-        precondition_rows = preconditions_collection.get(
-            where={"id": node_id}, include=["documents", "metadatas"]
-        )
+        precondition_rows = preconditions_collection.get(where=node_where, include=["documents", "metadatas"])
         precondition_docs = [
             d for d in (precondition_rows.get("documents") or []) if isinstance(d, str)
         ]
 
-        effect_rows = effects_collection.get(
-            where={"id": node_id}, include=["documents", "metadatas"]
-        )
+        effect_rows = effects_collection.get(where=node_where, include=["documents", "metadatas"])
         effect_docs = [d for d in (effect_rows.get("documents") or []) if isinstance(d, str)]
 
         node_dict: Dict[str, Any] = {
@@ -115,22 +145,32 @@ class ChromadbAdapter(Memory):
         }
         return node_dict
 
-    def _build_context_from_node_id(self, node_id: str) -> Context:
+    def _build_context_from_node_id(self, node_id: str, memory_type: str | None = None) -> Context:
         """Rebuild subtree starting from the queried node as root."""
         # Recursively build the tree starting from the queried node
         def build_node_tree(nid: str) -> Dict[str, Any] | None:
-            node_dict = self._build_node_dict_from_metadata(nid)
+            node_dict = self._build_node_dict_from_metadata(nid, memory_type=memory_type)
             if not node_dict:
                 return None
 
             # Find all children of this node by querying for nodes where parent_id == nid
             value_collection = self.client.get_or_create_collection(name="nodes_value")
+
+            child_where: Dict[str, Any] | None = {"parent_id": nid}
+            if memory_type:
+                child_where = {
+                    "$and": [
+                        {"parent_id": nid},
+                        {"memory_type": memory_type},
+                    ]
+                }
+
             children_rows = value_collection.get(
-                where={"parent_id": nid},
+                where=child_where,
                 include=["metadatas"]
             )
             children_metas = children_rows.get("metadatas") or []
-            
+
             # Recursively build each child
             children = []
             for child_meta in children_metas:
@@ -140,7 +180,7 @@ class ChromadbAdapter(Memory):
                         child_tree = build_node_tree(child_id)
                         if child_tree:
                             children.append(child_tree)
-            
+
             node_dict["children"] = children
             return node_dict
 
@@ -162,6 +202,7 @@ class ChromadbAdapter(Memory):
         nodes_summary = self.client.get_or_create_collection(name="nodes_summary")
         nodes_preconditions = self.client.get_or_create_collection(name="nodes_preconditions")
         nodes_effects = self.client.get_or_create_collection(name="nodes_effects")
+        memory_scope = str(memory_type).strip() if memory_type else "episodic"
 
         if not (serialized_context := context_to_dict(context=context)):
             return {
@@ -209,6 +250,13 @@ class ChromadbAdapter(Memory):
                 json.dumps(tool_args_raw, default=str) if tool_args_raw is not None else None
             )
 
+            goal_text = node.get("value")
+            normalized_value = (
+                self._normalize_goal(goal_text)
+                if isinstance(goal_text, str) and goal_text.strip()
+                else None
+            )
+
             base_metadata: Dict[str, Any] = {
                 "id": node_id,
                 "tool_name": node.get("tool_name") or None,
@@ -231,26 +279,28 @@ class ChromadbAdapter(Memory):
                 "previous": node.get("previous") or None,
                 "parent_id": parent_id,
                 "descendant_of": descendant_of,
-                "memory_type": memory_type,
+                "memory_type": memory_scope,
+                "is_root": parent_id is None,
+                "normalized_value": normalized_value,
             }
 
             goal_text = node.get("value")
             if isinstance(goal_text, str) and goal_text.strip():
                 value_documents.append(goal_text)
-                value_ids.append(node_id)
+                value_ids.append(f"{memory_scope}:{node_id}")
                 value_metadatas.append({**base_metadata, "kind": "goal"})
 
             summary_text = node.get("tool_response_summary")
             if isinstance(summary_text, str) and summary_text.strip():
                 summary_documents.append(summary_text)
-                summary_ids.append(f"{node_id}:summary")
+                summary_ids.append(f"{memory_scope}:{node_id}:summary")
                 summary_metadatas.append({**base_metadata, "kind": "summary"})
 
             for idx, precondition in enumerate(node.get("preconditions") or []):
                 if not isinstance(precondition, str) or not precondition.strip():
                     continue
                 precondition_documents.append(precondition)
-                precondition_ids.append(f"{node_id}:precondition:{idx}")
+                precondition_ids.append(f"{memory_scope}:{node_id}:precondition:{idx}")
                 precondition_metadatas.append(
                     {
                         **base_metadata,
@@ -263,7 +313,7 @@ class ChromadbAdapter(Memory):
                 if not isinstance(effect, str) or not effect.strip():
                     continue
                 effect_documents.append(effect)
-                effect_ids.append(f"{node_id}:effect:{idx}")
+                effect_ids.append(f"{memory_scope}:{node_id}:effect:{idx}")
                 effect_metadatas.append(
                     {
                         **base_metadata,
@@ -339,12 +389,31 @@ class ChromadbAdapter(Memory):
                 where = raw_where
 
         if memory_type:
-            if where is None:
-                where = {"memory_type": memory_type}
-            else:
-                where = {**where, "memory_type": memory_type}
+            where = self._merge_where(where, {"memory_type": memory_type})
+
+        if root_only:
+            where = self._merge_where(where, {"is_root": True})
+
+        if prefer_abstract:
+            where = self._merge_where(where, {"type": "abstract"})
 
         collection = self.client.get_or_create_collection(name=collection_name)
+
+        if collection_name == "nodes_value":
+            exact_where = self._merge_where(
+                where,
+                {"normalized_value": self._normalize_goal(value)},
+            )
+            exact_result = collection.get(where=exact_where, include=["metadatas"])
+            exact_metas = exact_result.get("metadatas") or []
+
+            if exact_metas:
+                exact_meta = exact_metas[0]
+                if isinstance(exact_meta, dict):
+                    node_id = exact_meta.get("id")
+                    if node_id:
+                        return self._build_context_from_node_id(node_id, memory_type=memory_type)
+
         result = collection.query(
             query_texts=[value],
             n_results=n_results,
@@ -374,44 +443,21 @@ class ChromadbAdapter(Memory):
             if not candidate_indices:
                 return None
 
-        def _meta_for_idx(idx: int) -> dict[str, Any]:
-            if idx < len(metas) and isinstance(metas[idx], dict):
-                return metas[idx]
-            return {}
-
-        if root_only and candidate_indices:
-            root_candidates = [
-                idx
-                for idx in candidate_indices
-                if not _meta_for_idx(idx).get("parent_id")
-            ]
-            if root_candidates:
-                candidate_indices = root_candidates
-
-        if prefer_abstract and candidate_indices:
-            abstract_candidates = [
-                idx
-                for idx in candidate_indices
-                if str(_meta_for_idx(idx).get("type") or "").strip().lower() == "abstract"
-            ]
-            if abstract_candidates:
-                candidate_indices = abstract_candidates
-
         selected_idx = candidate_indices[0] if candidate_indices else None
         if selected_idx is None:
             return None
 
         node_id: str | None = None
-        selected_meta = _meta_for_idx(selected_idx)
+        selected_meta = metas[selected_idx] if selected_idx < len(metas) and isinstance(metas[selected_idx], dict) else {}
         if selected_meta:
             metadata_id = selected_meta.get("id")
             if metadata_id:
                 node_id = str(metadata_id)
 
         if not node_id and selected_idx < len(ids):
-            node_id = str(ids[selected_idx]).split(":")[0]
+            node_id = self._extract_node_id_from_record_id(str(ids[selected_idx]))
 
         if not node_id:
             return None
 
-        return self._build_context_from_node_id(node_id)
+        return self._build_context_from_node_id(node_id, memory_type=memory_type)

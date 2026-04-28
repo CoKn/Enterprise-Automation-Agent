@@ -14,28 +14,21 @@ async def observe(agent_session: Agent):
     if not agent_session.active_node:
         return
 
+    # get active, previous and future nodes
     node = agent_session.active_node
-
-    global_goal = str(agent_session.global_goal_node)
     previous_nodes_list = agent_session.context.previous_nodes(node)
     next_nodes_list = agent_session.context.next_nodes(node)
-
-    previous_nodes = agent_session.context.represent_nodes(nodes=previous_nodes_list)
-    next_nodes = agent_session.context.represent_nodes(nodes=next_nodes_list)
-    current_node = agent_session.context.represent_nodes(nodes=[node])
-    tracked_parameters = agent_session.context.get_leaf_nodes_tool_args()
-    current_tool_response = node.tool_response
 
     step_observation_prompt_rendered = render_prompt(
         agent_session=agent_session,
         template=step_observation_prompt,
         context={
-            "global_goal": global_goal,
-            "previous_nodes": previous_nodes,
-            "next_nodes": next_nodes,
-            "current_node": current_node,
-            "tracked_parameters": tracked_parameters,
-            "current_tool_response": current_tool_response,
+            "global_goal": agent_session.global_goal_node.value,
+            "previous_nodes": agent_session.context.represent_nodes(nodes=previous_nodes_list),
+            "next_nodes": agent_session.context.represent_nodes(nodes=next_nodes_list),
+            "current_node": agent_session.context.represent_nodes(nodes=[node]),
+            "tracked_parameters": agent_session.context.get_leaf_nodes_tool_args(),
+            "current_tool_response": node.tool_response,
         },
     )
 
@@ -73,7 +66,7 @@ async def observe(agent_session: Agent):
         else:
             node.node_status = NodeStatus.completed
 
-        # Recompute parent statuses after the leaf update.
+        # recompute parent statuses after the leaf update
         agent_session.context.recompute_statuses()
 
         metadata = agent_session.memory.save(context=agent_session.context)
@@ -84,11 +77,11 @@ async def observe(agent_session: Agent):
             node.tool_response_summary,
         )
 
-        # Keep failed node as active so the next cycle can replan/repair it.
+        # keep failed node as active so the next cycle can replan/repair it
         if node.node_status == NodeStatus.failed:
             return
 
-        # Otherwise move to the next frontier node in the tree.
+        # otherwise move to the next frontier node in the tree
         agent_session.active_node = agent_session.context.select_frontier_node(agent_session.global_goal_node)
         if agent_session.active_node is None:
             agent_session.termination = True

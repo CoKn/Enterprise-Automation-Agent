@@ -12,7 +12,7 @@ async def act(agent_session: Agent):
 
     node = agent_session.active_node
 
-    # These are scheduler/control-flow errors, not execution failures.
+    # control flow errors
     if node.node_type == NodeType.abstract:
         raise RuntimeError(
             f"Programming error: act() called on abstract node '{node.id}'"
@@ -53,14 +53,7 @@ async def act(agent_session: Agent):
         tool_response = node.tool_response
         if isinstance(tool_response, dict) and bool(tool_response.get("is_error")):
             node.node_status = NodeStatus.failed
-
-        # logger.debug(
-        #     "Tool response for %s on node=%s: %s",
-        #     tool_name,
-        #     node.id,
-        #     node.tool_response,
-        # )
-
+            
         return
 
     except Exception as e:

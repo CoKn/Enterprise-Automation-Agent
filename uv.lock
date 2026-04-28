@@ -258,6 +258,24 @@ wheels = [
 ]
 
 [[package]]
+name = "claude-agent-sdk"
+version = "0.1.69"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "anyio" },
+    { name = "mcp" },
+    { name = "sniffio" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/4f/fa/c6913cf92796cf2d9792ebb30247880cc5740be70d0cc2663ab1d0e253f2/claude_agent_sdk-0.1.69.tar.gz", hash = "sha256:4034a1c9d550329af7aeb0615f9bd2e7b853a9a53da7be5278ee062330df223a", size = 241101, upload-time = "2026-04-28T00:43:39.873Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/cf/1b/14ad5b8686f68bc3c41ce5c287d9b6a919bf5a4c6d70cb1513ccec03df64/claude_agent_sdk-0.1.69-py3-none-macosx_11_0_arm64.whl", hash = "sha256:dd896e6e30719d4824687b2aa968d603e4d4f0056fdd848932cf969f393a32a7", size = 63446754, upload-time = "2026-04-28T00:43:43.296Z" },
+    { url = "https://files.pythonhosted.org/packages/81/ee/a183b8b9ca5c7b8cc51d93ba83676938803b8f63f0c788b402d4056cc606/claude_agent_sdk-0.1.69-py3-none-macosx_11_0_x86_64.whl", hash = "sha256:09f1e0b75811e2777bfde119af24a1c1c3a13e333f23af11eb049eccf1dece64", size = 65296492, upload-time = "2026-04-28T00:43:46.336Z" },
+    { url = "https://files.pythonhosted.org/packages/e3/a1/2252335f8991c62ba2b6ec2441406978c4267e357e9659092bce6af6a614/claude_agent_sdk-0.1.69-py3-none-manylinux_2_17_aarch64.whl", hash = "sha256:1aab5107a71290f5afa38b1f967c7b27df986248b662a81fc69b5a38be3f17f2", size = 76619235, upload-time = "2026-04-28T00:43:49.63Z" },
+    { url = "https://files.pythonhosted.org/packages/9c/a4/8426b7325e64bc2487ee943d8f0ad885920f0919466f039ebe70b40ed42e/claude_agent_sdk-0.1.69-py3-none-manylinux_2_17_x86_64.whl", hash = "sha256:f8caf9f2d29f109b1c5e5c1336984376b3597634ab0cd4d7d902f43bb33ee020", size = 76786152, upload-time = "2026-04-28T00:43:53.675Z" },
+    { url = "https://files.pythonhosted.org/packages/7e/ae/d64cbe0ecd68f7b5c255316ce78e158eb499d6da988b99d5fbee00cc4824/claude_agent_sdk-0.1.69-py3-none-win_amd64.whl", hash = "sha256:d8327e7f60a687b1cbfcc6da3b1428c89a60194c884bebee3fb282807163bd2c", size = 78193701, upload-time = "2026-04-28T00:43:57.983Z" },
+]
+
+[[package]]
 name = "click"
 version = "8.3.2"
 source = { registry = "https://pypi.org/simple" }
@@ -484,6 +502,7 @@ dependencies = [
     { name = "fastmcp" },
     { name = "jinja2" },
     { name = "langchain-text-splitters" },
+    { name = "langsmith", extra = ["claude-agent-sdk"] },
     { name = "markdownify" },
     { name = "matplotlib" },
     { name = "mcp" },
@@ -509,6 +528,7 @@ requires-dist = [
     { name = "fastmcp", specifier = ">=3.2.0" },
     { name = "jinja2", specifier = ">=3.1.6" },
     { name = "langchain-text-splitters", specifier = ">=1.1.1" },
+    { name = "langsmith", extras = ["claude-agent-sdk"], specifier = ">=0.7.31" },
     { name = "markdownify", specifier = ">=1.2.2" },
     { name = "matplotlib", specifier = ">=3.10.8" },
     { name = "mcp", specifier = ">=1.27.0" },
@@ -1066,6 +1086,11 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/e6/11/696019490992db5c87774dc20515529ef42a01e1d770fb754ed6d9b12fb0/langsmith-0.7.31.tar.gz", hash = "sha256:331ee4f7c26bb5be4022b9859b7d7b122cbf8c9d01d9f530114c1914b0349ffb", size = 1178480, upload-time = "2026-04-14T17:55:41.242Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/1d/a1/a013cf458c301cda86a213dd153ce0a01c93f1ab5833f951e6a44c9763ce/langsmith-0.7.31-py3-none-any.whl", hash = "sha256:0291d49203f6e80dda011af1afda61eb0595a4d697adb684590a8805e1d61fb6", size = 373276, upload-time = "2026-04-14T17:55:39.677Z" },
+]
+
+[package.optional-dependencies]
+claude-agent-sdk = [
+    { name = "claude-agent-sdk" },
 ]
 
 [[package]]

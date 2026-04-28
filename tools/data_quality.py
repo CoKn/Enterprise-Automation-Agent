@@ -55,7 +55,7 @@ def _is_valid_numeric(value: Any) -> bool:
 
 @mcp.tool()
 def filter_out_outliers(
-    records: list[dict[str, Any]], property_name: str
+    records: list[dict[str, Any]]
 ) -> dict[str, Any]:
     """Filter records by one-standard-deviation distance from the mean.
 
@@ -70,9 +70,6 @@ def filter_out_outliers(
     Parameters:
     - records:
         List of dictionary records to evaluate.
-    - property_name:
-        The key in each record that points to the numeric value used for
-        outlier detection.
 
     Returns:
     A dictionary with:
@@ -83,6 +80,7 @@ def filter_out_outliers(
     - outlier_records: Records outside one standard deviation of the mean.
     - skipped_records: Records skipped because the property was missing or invalid.
     """
+    property_name = "Price"
     if not records:
         return {
             "property_name": property_name,

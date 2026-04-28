@@ -7,29 +7,32 @@ from agent.domain.react.reflect import reflect
 
 
 async def run_cycle(agent_session: Agent):
+    node = agent_session.active_node
+    if not node:
+        return
 
     # case 1: active node is abstract and needs expantion
-    if agent_session.active_node.type == NodeType.abstract:
+    if node.type == NodeType.abstract:
         await plan(agent_session=agent_session)
         return
 
     
     # case 2: active node is parcially planned and needs parameters filled
-    elif agent_session.active_node.type == NodeType.parcially_planned:
+    elif node.type == NodeType.parcially_planned:
         await plan_parameters(agent_session=agent_session)
         return
 
 
     # case 3: active node is fully planned but the status if failed and need repair
     elif (
-        agent_session.active_node.type == NodeType.fully_planned and 
-        agent_session.active_node.status == NodeStatus.failed
+        node.type == NodeType.fully_planned and 
+        node.status == NodeStatus.failed
     ):
         await replan(agent_session=agent_session)
         return
 
     # case 4: active node is fully planned and needs execution (act + observe)
-    elif agent_session.active_node.type == NodeType.fully_planned:
+    elif node.type == NodeType.fully_planned:
         await act(agent_session=agent_session)
         await observe(agent_session=agent_session)
         return
@@ -67,10 +70,21 @@ async def loop_run_cycle(agent_session: Agent) -> Context:
                 agent_session.step_counter += 1
 
             # run reflection to get answer and determin if goal was achived
+            if agent_session.skip_reflection:
+                completed = True
+
+                #TODO: Remove this later
+                agent_session.analytics.mark_goal_achieved(
+                    run_id=agent_session.run_id,
+                    goal_achieved=True,
+                )
+                return agent_session.context
+
             if await reflect(agent_session=agent_session):
                 completed = True
                 return agent_session.context
-
+            
+            # TODO: remove to integrate replanning
             return agent_session.context
 
             # reflect says goal is not achieved; stop only if budget is exhausted

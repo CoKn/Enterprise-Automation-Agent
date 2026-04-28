@@ -167,6 +167,8 @@ class Context:
                 next_node.previous = replacement_root.id
 
         self.rebuild_indexes()
+        # TODO: Check this
+        return replacement_root
 
     def extend_node_with_subtree(self, target_node: "Node", extension_root: "Node") -> int:
         if target_node is None or extension_root is None:

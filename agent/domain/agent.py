@@ -28,6 +28,7 @@ class Agent:
     total_prompt_tokens: int = 0
     total_completion_tokens: int = 0
     total_tokens: int = 0
+    skip_reflection: bool = False
 
     tools: Tools
     llm: LLM
@@ -63,6 +64,7 @@ class Agent:
         self.total_prompt_tokens = 0
         self.total_completion_tokens = 0
         self.total_tokens = 0
+        self.skip_reflection = False
 
     @property
     def run_id(self) -> str:
@@ -87,7 +89,14 @@ class Agent:
         return next_node
 
     def start_run(self, initial_prompt: str) -> None:
-        self.initial_prompt = initial_prompt
+        root_node = self.context.get_root() if self.context else None
+        if root_node is not None:
+            self.initial_prompt = root_node.value
+        else:
+            self.initial_prompt = initial_prompt
+
+        self.skip_reflection = False
+
         self.run_started_at = datetime.now()
 
         if not self.analytics or not self.global_goal_node:
@@ -95,7 +104,7 @@ class Agent:
 
         self.analytics.save_run_start(
             run_id=self.run_id,
-            initial_prompt=initial_prompt,
+            initial_prompt=self.initial_prompt,
             global_goal=self.global_goal_node.value,
             started_at=self.run_started_at,
         )

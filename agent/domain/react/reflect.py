@@ -35,11 +35,12 @@ def has_ancestor_in_set(node: Node, ancestor_ids: set[str]) -> bool:
     return False
 
 
+# TODO: Check this line
 def query_existing_procedural(agent_session: Agent, goal: str) -> Optional[Context]:
     filter = {
         "collection": "nodes_value",
         "n_results": 10,
-        "max_distance": 0.55,
+        "max_distance": 0.5,
         "root_only": True,
         "prefer_abstract": True,
     }
@@ -101,17 +102,16 @@ def clean_reflected_context(context: Context) -> None:
         # Keep status as pending
         node.node_status = NodeStatus.pending
         
-        # Re-classify node type: fully_planned requires BOTH tool_name and tool_args
-        if node.node_type == NodeType.fully_planned:
-            has_tool_name = bool(node.tool_name and str(node.tool_name).strip())
-            has_tool_args = isinstance(node.tool_args, dict) and len(node.tool_args) > 0
-            
-            if not (has_tool_name and has_tool_args):
-                # Downgrade to partially_planned if missing either tool_name or tool_args
-                node.node_type = NodeType.parcially_planned
+        # Re-classify node type: fully_planned requires BOTH tool_name AND tool_args
+        has_tool_name = bool(node.tool_name and str(node.tool_name).strip())
+        has_tool_args = isinstance(node.tool_args, dict)
 
-            if not has_tool_name:
-                node.node_type = NodeType.abstract
+        if has_tool_name and has_tool_args:
+            node.node_type = NodeType.fully_planned
+        elif has_tool_name:
+            node.node_type = NodeType.parcially_planned
+        else:
+            node.node_type = NodeType.abstract
 
 
 def enforce_pending_status_for_persistence(context: Context) -> None:
@@ -190,10 +190,10 @@ def save_distilled_procedural(agent_session: Agent, procedural_context: Context)
 
 
 def count_runtime_reused_subtrees(runtime_context: Context) -> int:
-    """Count reused abstract subtrees from the executed runtime context.
+    """Count reused subtrees from the executed runtime context.
 
-    A subtree is considered reused when its root abstract node is marked cached.
-    Nested cached abstract nodes are not double-counted.
+    A subtree is considered reused when its root node is marked cached.
+    Nested cached nodes are not double-counted.
     """
     runtime_context.rebuild_indexes()
 
@@ -201,18 +201,18 @@ def count_runtime_reused_subtrees(runtime_context: Context) -> int:
 
     for root in runtime_context.roots:
         for node in runtime_context.bfs_nodes(root):
-            if node.node_type != NodeType.abstract or not node.cached:
+            if not node.cached:
                 continue
 
             current = node.parent
-            has_cached_abstract_ancestor = False
+            has_cached_ancestor = False
             while current is not None:
-                if current.node_type == NodeType.abstract and current.cached:
-                    has_cached_abstract_ancestor = True
+                if current.cached:
+                    has_cached_ancestor = True
                     break
                 current = current.parent
 
-            if not has_cached_abstract_ancestor:
+            if not has_cached_ancestor:
                 reused_roots.add(str(node.id))
 
     return len(reused_roots)
@@ -300,10 +300,7 @@ async def reflect(agent_session: Agent):
     )
 
     runtime_reused_subtrees = count_runtime_reused_subtrees(agent_session.context)
-    persistence_stats["reused_subtrees"] = max(
-        persistence_stats["reused_subtrees"],
-        runtime_reused_subtrees,
-    )
+    persistence_stats["runtime_reused_subtrees"] = runtime_reused_subtrees
 
     logger.info(
         "Reflection produced procedural tree with %s nodes (saved_subtrees=%s, reused_subtrees=%s, saved_nodes=%s)",

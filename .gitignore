@@ -23,3 +23,8 @@ sql.sql
 dashboard.py
 
 agent/config_backup.json
+
+data_sets
+
+
+.DS_Store

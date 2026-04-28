@@ -10,6 +10,13 @@ import json
 
 logger = get_logger(__name__)
 
+def _mark_subtree_cached(node):
+    stack = [node]
+    while stack:
+        current = stack.pop()
+        current.cached = True
+        stack.extend(current.children or [])
+
 
 async def plan_parameters(agent_session: Agent):
 
@@ -123,41 +130,73 @@ async def plan(agent_session: Agent):
     filter_ = {
         "collection": "nodes_value",
         "n_results": 10,
-        "max_distance": 0.55,
+        "max_distance": 0.5,
         "root_only": True,
         "prefer_abstract": True,
     }
-    existing_plan: Context | None  = agent_session.memory.query(
+    existing_plan: Context | None = agent_session.memory.query(
         agent_session.active_node.value,
         filter=filter_,
         memory_type="procedural",
     )
 
+    # Fallback: some persisted procedural roots are fully_planned.
+    # If abstract-only retrieval misses, retry without type restriction.
+    if existing_plan is None:
+        fallback_filter = {
+            "collection": "nodes_value",
+            "n_results": 10,
+            "max_distance": 1,
+            "root_only": True,
+            "prefer_abstract": False,
+        }
+        existing_plan = agent_session.memory.query(
+            agent_session.active_node.value,
+            filter=fallback_filter,
+            memory_type="procedural",
+        )
+
     # if plan exists wire it into the context tree
     if existing_plan:
-        # wireing here
         replacement_root = existing_plan.get_root()
-        agent_session.context.replace_node_with_subtree(
+        if not replacement_root:
+            raise RuntimeError("Procedural memory returned a context without a root")
+
+        # wireing here
+        inserted_root = agent_session.context.replace_node_with_subtree(
             target_node=agent_session.active_node,
             replacement_root=replacement_root,
         )
-        agent_session.global_goal_node = agent_session.context.get_root()
-        
-        # re-binding the agent to the current root
-        agent_session.active_node = agent_session.context.select_frontier_node(replacement_root) or replacement_root
 
-        logger.info(
-            "Reusing cached plan for node '%s' type=%s",
-            agent_session.active_node.value,
-            agent_session.active_node.node_type.name,
+        if inserted_root is None:
+            raise RuntimeError("replace_node_with_subtree() must return the inserted root")
+
+        _mark_subtree_cached(inserted_root)
+        agent_session.skip_reflection = True
+        agent_session.context.rebuild_indexes()
+
+        agent_session.global_goal_node = agent_session.context.get_root()
+        if not agent_session.global_goal_node:
+            raise RuntimeError("No root available after cached plan insertion")
+
+        # re-binding the agent to the current root
+        agent_session.active_node = (
+            agent_session.context.select_frontier_node(inserted_root)
+            or agent_session.context.select_frontier_node(agent_session.global_goal_node)
+            or inserted_root
         )
 
+        logger.info(
+            "Reusing cached plan for node '%s' type=%s cached=%s",
+            inserted_root.value,
+            inserted_root.node_type.name,
+            inserted_root.cached,
+        )
 
         # TODO: remove later
         serialized_context = agent_session.planner.serializer.serialize_context(agent_session.context)
         logger.info("%s:\n%s", "Context Tree", json.dumps(serialized_context, indent=2, default=str))
 
-    
     # no existing path available so we expand the node
     else:
         tool_docs = await agent_session.tools.get_tools_json()
@@ -170,7 +209,7 @@ async def plan(agent_session: Agent):
             run_id=agent_session.run_id,
         )
 
-         # write usage to analytics db
+        # write usage to analytics db
         agent_session.record_llm_usage(
             phase="plan",
             llm_result=llm_result,
