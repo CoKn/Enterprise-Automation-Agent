@@ -12,7 +12,6 @@ from agent.domain.prompts.react import (
 
 from agent.application.usecases.prompt_rendering import render_prompt
 from agent.domain.agent import Agent
-from agent.domain.context import Node, Context
 
 import json
 
