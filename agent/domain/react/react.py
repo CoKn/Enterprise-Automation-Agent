@@ -79,7 +79,7 @@ async def loop_run_cycle(agent_session: Agent) -> Context:
             if agent_session.skip_reflection:
                 completed = True
 
-                #TODO: Remove this later
+                # update analytics db entry with new status
                 agent_session.analytics.mark_goal_achieved(
                     run_id=agent_session.run_id,
                     goal_achieved=True,

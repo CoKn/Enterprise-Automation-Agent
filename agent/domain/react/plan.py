@@ -108,7 +108,7 @@ async def plan(agent_session: Agent):
     filter_ = {
         "collection": "nodes_value",
         "n_results": 10,
-        "max_distance": 0.5,
+        "max_distance": 1,
         "root_only": True,
         "prefer_abstract": True,
     }
@@ -187,7 +187,6 @@ async def plan(agent_session: Agent):
 
 # repair a plan
 async def repair(agent_session: Agent):
-    
 
     # get failed node, tool specs
     failed_node = agent_session.active_node
@@ -218,6 +217,4 @@ async def repair(agent_session: Agent):
         ) or (
         agent_session.global_goal_node
     )
-
-
 
