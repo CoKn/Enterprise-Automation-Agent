@@ -12,6 +12,7 @@ def _coerce_level(level: Optional[str | int]) -> int:
 		return level
 	if isinstance(level, str):
 		try:
+			# TODO: fix depricated function
 			return logging.getLevelName(level.upper())  # type: ignore[arg-type]
 		except Exception:
 			return logging.INFO

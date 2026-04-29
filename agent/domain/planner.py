@@ -25,6 +25,7 @@ class Planner:
         self.serializer = serializer
         self.analytics = analytics
 
+
     def plan(self, prompt: str):
 
         # 1. send prompt to LLM (single combined prompt string)
@@ -107,7 +108,7 @@ class Planner:
 
     def replan(self, prompt: str, context: Context, failed_node: Node):
 
-        # 3. send prompt to LLM
+        # 1. send prompt to LLM
         llm_result = self.llm.call(
             prompt=prompt,
             json_mode=True,
@@ -131,7 +132,7 @@ class Planner:
         )
 
         try:
-            # 4. parse response
+            # 2. parse response
             replanned = json.loads(result)
 
             insertion_payload = replanned.get("node", None)
