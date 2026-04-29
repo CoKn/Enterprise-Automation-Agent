@@ -1,13 +1,12 @@
-from __future__ import annotations
-
 # planner for generating new planns
+from __future__ import annotations
 import json
 from uuid import uuid4
 from typing import Optional
 
 from agent.logger import get_logger
 
-from agent.domain.context import NodeStatus
+from agent.domain.context import Context, Node, NodeStatus
 
 
 from agent.application.ports.outbound.llm_interface import LLM
@@ -106,8 +105,7 @@ class Planner:
         return extension_root, llm_result
 
 
-    # TODO: fix this function
-    def replan(self, prompt: str):
+    def replan(self, prompt: str, context: Context, failed_node: Node):
 
         # 3. send prompt to LLM
         llm_result = self.llm.call(
@@ -136,14 +134,7 @@ class Planner:
             # 4. parse response
             replanned = json.loads(result)
 
-            insertion_payload = None
-            if isinstance(replanned, dict):
-                if isinstance(replanned.get("node"), dict):
-                    insertion_payload = replanned.get("node")
-                    # TODO: remove this
-                elif isinstance(replanned.get("root"), dict):
-                    # Backward compatibility for older prompt outputs.
-                    insertion_payload = replanned.get("root")
+            insertion_payload = replanned.get("node", None)
 
             if not isinstance(insertion_payload, dict):
                 raise ValueError("Replanner output must include a single node under key 'node'")
@@ -155,16 +146,13 @@ class Planner:
             insertion_node.tool_response = None
             insertion_node.tool_response_summary = None
 
-            # derive local context/root from agent_session
-            root = agent_session.active_node
-            context = agent_session.context
-
-            failed_node = context.get_node(root.id) or root
-            parent = failed_node.parent
+            context.rebuild_indexes()
+            failed = context.get_node(failed_node.id) or failed_node
+            parent = failed.parent
 
             if parent is not None:
                 siblings = parent.children
-                idx = next((i for i, n in enumerate(siblings) if n.id == failed_node.id), -1)
+                idx = next((i for i, n in enumerate(siblings) if n.id == failed.id), -1)
                 old_next = siblings[idx + 1] if idx >= 0 and idx + 1 < len(siblings) else None
 
                 insertion_node.parent = parent
@@ -174,7 +162,7 @@ class Planner:
                     siblings.append(insertion_node)
             else:
                 roots = context.roots
-                idx = next((i for i, n in enumerate(roots) if n.id == failed_node.id), -1)
+                idx = next((i for i, n in enumerate(roots) if n.id == failed.id), -1)
                 old_next = roots[idx + 1] if idx >= 0 and idx + 1 < len(roots) else None
 
                 insertion_node.parent = None
@@ -183,9 +171,9 @@ class Planner:
                 else:
                     roots.append(insertion_node)
 
-            insertion_node.previous = failed_node.id
+            insertion_node.previous = failed.id
             insertion_node.next = old_next.id if old_next is not None else None
-            failed_node.next = insertion_node.id
+            failed.next = insertion_node.id
             if old_next is not None:
                 old_next.previous = insertion_node.id
 

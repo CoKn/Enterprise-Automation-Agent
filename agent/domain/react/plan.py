@@ -2,6 +2,7 @@ from agent.domain.agent import Agent
 from agent.domain.context import Context, NodeType, NodeStatus
 from agent.domain.prompt_rendering import (build_parameter_generation_prompt,
                                            build_plan_extention_prompt,
+                                           build_replanning_prompt,
                                            build_planning_prompt
                                            )
 
@@ -192,8 +193,11 @@ async def repair(agent_session: Agent):
     failed_node = agent_session.active_node
 
     # send request to llm
+    prompt = build_replanning_prompt(agent_session=agent_session)
     agent_session.context, llm_result = agent_session.planner.replan(
-        agent_session=agent_session
+        prompt=prompt,
+        context=agent_session.context,
+        failed_node=failed_node,
     )
 
     # write usage to analytics db
@@ -207,8 +211,13 @@ async def repair(agent_session: Agent):
     if not agent_session.global_goal_node:
         raise RuntimeError("No root available after replanning")
 
-    agent_session.active_node = agent_session.context.next_node(failed_node) or agent_session.context.select_frontier_node(agent_session.global_goal_node) or agent_session.global_goal_node
-
+    agent_session.active_node = (
+        agent_session.context.next_node(failed_node)
+        ) or (
+        agent_session.context.select_frontier_node(agent_session.global_goal_node)
+        ) or (
+        agent_session.global_goal_node
+    )
 
 
 
