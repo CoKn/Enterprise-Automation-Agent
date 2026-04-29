@@ -127,7 +127,7 @@ class Context:
         self.roots.append(root)
         self.rebuild_indexes()
 
-    def replace_node_with_subtree(self, target_node: "Node", replacement_root: "Node") -> None:
+    def replace_node_with_subtree(self, target_node: "Node", replacement_root: "Node") -> "Node | None":
         if target_node is None or replacement_root is None:
             return
 
@@ -170,6 +170,26 @@ class Context:
         self.rebuild_indexes()
         # TODO: Check this
         return replacement_root
+
+    def _mark_subtree_cached(self, node: "Node") -> None:
+        stack = [node]
+        while stack:
+            current = stack.pop()
+            current.cached = True
+            stack.extend(current.children or [])
+
+    def insert_cached_subtree(self, target_node: "Node", replacement_root: "Node") -> "Node | None":
+        inserted_root = self.replace_node_with_subtree(
+            target_node=target_node,
+            replacement_root=replacement_root,
+        )
+
+        if inserted_root is None:
+            return None
+
+        self._mark_subtree_cached(inserted_root)
+        self.rebuild_indexes()
+        return inserted_root
 
     def extend_node_with_subtree(self, target_node: "Node", extension_root: "Node") -> int:
         if target_node is None or extension_root is None:

@@ -12,14 +12,6 @@ import json
 
 logger = get_logger(__name__)
 
-# TODO: double check this
-def _mark_subtree_cached(node):
-    stack = [node]
-    while stack:
-        current = stack.pop()
-        current.cached = True
-        stack.extend(current.children or [])
-
 
 # generate parameters for parcially planned node
 async def plan_parameters(agent_session: Agent):
@@ -73,41 +65,43 @@ async def plan_parameters(agent_session: Agent):
         ) from e
     
 
-async def replan():
-    ...
+# generate an entire new plan
+async def replan(agent_session: Agent):
+
+    if not agent_session.active_node:
+        return
+
+    # build prompt and generate new plan
+    prompt = build_plan_extention_prompt(agent_session=agent_session),
+    extension_root, llm_result = agent_session.planner.extend_plan(
+        prompt=prompt
+    )
+
+    agent_session.record_llm_usage(
+        phase="extend_plan",
+        llm_result=llm_result
+    )
+
+    agent_session.context.extend_node_with_subtree(
+        target_node=agent_session.active_node,
+        extension_root=extension_root,
+    )
+
+    agent_session.global_goal_node = agent_session.context.get_root()
+    if not agent_session.global_goal_node:
+        raise RuntimeError("No root available after plan extension")
+
+    agent_session.active_node = agent_session.context.select_frontier_node(agent_session.global_goal_node)
+    return
 
 
 # create a new plan
 async def plan(agent_session: Agent):
 
+    # active node is abstract and needs expantion
     if not agent_session.active_node:
         return
 
-    # TODO: put this into own function
-    # case: agent plan didn't worked and needs a new plan for prgressing
-    if agent_session.active_node.node_type == NodeType.abstract and agent_session.active_node.children:
-
-        prompt = build_plan_extention_prompt(agent_session=agent_session),
-        extension_root, llm_result = agent_session.planner.extend_plan(
-            prompt=prompt
-        )
-
-        agent_session.record_llm_usage(
-            phase="extend_plan",
-            llm_result=llm_result
-        )
-
-        agent_session.context.extend_node_with_subtree(
-            target_node=agent_session.active_node,
-            extension_root=extension_root,
-        )
-
-        agent_session.global_goal_node = agent_session.context.get_root()
-        if not agent_session.global_goal_node:
-            raise RuntimeError("No root available after plan extension")
-
-        agent_session.active_node = agent_session.context.select_frontier_node(agent_session.global_goal_node)
-        return
 
     # if node type is abstract check if active node is already in procedural memory
     filter_ = {
@@ -120,24 +114,9 @@ async def plan(agent_session: Agent):
     existing_plan: Context | None = agent_session.memory.query(
         agent_session.active_node.value,
         filter=filter_,
-        memory_type="procedural",
+        memory_type="procedural"
     )
 
-    # Fallback: some persisted procedural roots are fully_planned.
-    # If abstract-only retrieval misses, retry without type restriction.
-    if existing_plan is None:
-        fallback_filter = {
-            "collection": "nodes_value",
-            "n_results": 10,
-            "max_distance": 1,
-            "root_only": True,
-            "prefer_abstract": False,
-        }
-        existing_plan = agent_session.memory.query(
-            agent_session.active_node.value,
-            filter=fallback_filter,
-            memory_type="procedural",
-        )
 
     # if plan exists wire it into the context tree
     if existing_plan:
@@ -145,18 +124,13 @@ async def plan(agent_session: Agent):
         if not replacement_root:
             raise RuntimeError("Procedural memory returned a context without a root")
 
-        # wireing here
-        inserted_root = agent_session.context.replace_node_with_subtree(
+        inserted_root = agent_session.context.insert_cached_subtree(
             target_node=agent_session.active_node,
-            replacement_root=replacement_root,
+            replacement_root=replacement_root
         )
 
         if inserted_root is None:
-            raise RuntimeError("replace_node_with_subtree() must return the inserted root")
-
-        _mark_subtree_cached(inserted_root)
-        agent_session.skip_reflection = True
-        agent_session.context.rebuild_indexes()
+            raise RuntimeError("insert_cached_subtree() must return the inserted root")
 
         agent_session.global_goal_node = agent_session.context.get_root()
         if not agent_session.global_goal_node:
@@ -176,7 +150,7 @@ async def plan(agent_session: Agent):
             inserted_root.cached,
         )
 
-    # no existing path available so we expand the node
+    # no existing path available so we create a new plan
     else:
 
         prompt = build_planning_prompt(agent_session=agent_session)
@@ -222,11 +196,10 @@ async def repair(agent_session: Agent):
         agent_session=agent_session
     )
 
-    # update active node to new replanned node
     # write usage to analytics db
     agent_session.record_llm_usage(
         phase="replan",
-        llm_result=llm_result,
+        llm_result=llm_result
     )
 
     # re-binding the agent to the current root
