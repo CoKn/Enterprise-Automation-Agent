@@ -1,6 +1,6 @@
 from agent.domain.agent import Agent
 from agent.domain.context import NodeStatus, NodeType, Context
-from agent.domain.react.plan import plan, replan, plan_parameters
+from agent.domain.react.plan import plan, repair, plan_parameters, replan
 from agent.domain.react.act import act
 from agent.domain.react.observe import observe
 from agent.domain.react.reflect import reflect
@@ -10,28 +10,34 @@ async def run_cycle(agent_session: Agent):
     node = agent_session.active_node
     if not node:
         return
+    
+    # case 1: plan has failed and need entire new plan
+    if node.type == NodeType.abstract and agent_session.active_node.children:
+        await replan(agent_session=agent_session)
 
-    # case 1: active node is abstract and needs expantion
-    if node.type == NodeType.abstract:
+
+    # case 2: active node is abstract and needs expantion
+    elif node.type == NodeType.abstract:
         await plan(agent_session=agent_session)
         return
 
     
-    # case 2: active node is parcially planned and needs parameters filled
+    # case 3: active node is parcially planned and needs parameters filled
     elif node.type == NodeType.parcially_planned:
         await plan_parameters(agent_session=agent_session)
         return
 
 
-    # case 3: active node is fully planned but the status if failed and need repair
+    # case 4: active node is fully planned but the status if failed and need repair
     elif (
         node.type == NodeType.fully_planned and 
         node.status == NodeStatus.failed
     ):
-        await replan(agent_session=agent_session)
+        await repair(agent_session=agent_session)
         return
+    
 
-    # case 4: active node is fully planned and needs execution (act + observe)
+    # case 5: active node is fully planned and needs execution (act + observe)
     elif node.type == NodeType.fully_planned:
         await act(agent_session=agent_session)
         await observe(agent_session=agent_session)

@@ -71,6 +71,10 @@ async def plan_parameters(agent_session: Agent):
         raise ValueError(
             "Parameter generation response must be valid JSON with an 'arguments' object"
         ) from e
+    
+
+async def replan():
+    ...
 
 
 # create a new plan
@@ -85,12 +89,12 @@ async def plan(agent_session: Agent):
 
         prompt = build_plan_extention_prompt(agent_session=agent_session),
         extension_root, llm_result = agent_session.planner.extend_plan(
-            prompt=prompt,
+            prompt=prompt
         )
 
         agent_session.record_llm_usage(
             phase="extend_plan",
-            llm_result=llm_result,
+            llm_result=llm_result
         )
 
         agent_session.context.extend_node_with_subtree(
@@ -179,7 +183,7 @@ async def plan(agent_session: Agent):
 
         # generate plan
         agent_session.context, llm_result = agent_session.planner.plan(
-            prompt==prompt
+            prompt=prompt
         )
 
         # write usage to analytics db
@@ -207,7 +211,7 @@ async def plan(agent_session: Agent):
 
 
 # repair a plan
-async def replan(agent_session: Agent):
+async def repair(agent_session: Agent):
     
 
     # get failed node, tool specs
@@ -215,8 +219,7 @@ async def replan(agent_session: Agent):
 
     # send request to llm
     agent_session.context, llm_result = agent_session.planner.replan(
-        agent_session=agent_session,
-        run_id=agent_session.run_id,
+        agent_session=agent_session
     )
 
     # update active node to new replanned node

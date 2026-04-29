@@ -36,7 +36,7 @@ def has_ancestor_in_set(node: Node, ancestor_ids: set[str]) -> bool:
 
 
 # TODO: Check this line
-def query_existing_procedural(agent_session: Agent, goal: str) -> Optional[Context]:
+def query_procedural_memory(agent_session: Agent, goal: str) -> Optional[Context]:
     filter = {
         "collection": "nodes_value",
         "n_results": 10,
@@ -149,7 +149,7 @@ def save_distilled_procedural(agent_session: Agent, procedural_context: Context)
     # pass 1: detect duplicates against existing procedural memory before saving anything
     existing_matches: dict[str, Node] = {}
     for node in abstract_nodes:
-        existing_context = query_existing_procedural(agent_session=agent_session, goal=node.value)
+        existing_context = query_procedural_memory(agent_session=agent_session, goal=node.value)
         existing_root = existing_context.get_root() if existing_context else None
         if existing_root and existing_root.value.strip().lower() == node.value.strip().lower():
             existing_matches[str(node.id)] = existing_root
