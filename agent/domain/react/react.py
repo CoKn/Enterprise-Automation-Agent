@@ -90,10 +90,8 @@ async def loop_run_cycle(agent_session: Agent) -> Context:
                 completed = True
                 return agent_session.context
             
-            # TODO: remove to integrate replanning
-            return agent_session.context
 
-            # reflect says goal is not achieved; stop only if budget is exhausted
+            # reflect says goal is not achieved -> stop only if budget is exhausted
             if agent_session.step_counter >= agent_session.max_steps:
                 agent_session.termination = True
                 return agent_session.context
@@ -109,8 +107,6 @@ async def loop_run_cycle(agent_session: Agent) -> Context:
 
             agent_session.context.rebuild_indexes()
             agent_session.active_node = root
-            agent_session.global_goal_achived = False
-            agent_session.termination = False
 
     except Exception:
         run_error = True

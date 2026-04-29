@@ -59,7 +59,7 @@ async def observe(agent_session: Agent):
             agent_session.active_node.tool_response_summary,
         )
 
-        # keep failed node as active so the next cycle can replan/repair it
+        # keep failed node as active so the next cycle can repair it
         if agent_session.active_node.node_status == NodeStatus.failed:
             return
 
