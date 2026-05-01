@@ -29,7 +29,7 @@ class AzureOpenAIAdapter(LLM, BaseModel):
         try:
             messages = [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": prompt},
+                {"role": "user", "content": prompt}
             ]
             response = self._client.chat.completions.create(
                 messages=messages,

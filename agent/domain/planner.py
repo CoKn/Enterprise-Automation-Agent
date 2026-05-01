@@ -111,7 +111,7 @@ class Planner:
         # 1. send prompt to LLM
         llm_result = self.llm.call(
             prompt=prompt,
-            json_mode=True,
+            json_mode=True
         )
 
         if llm_result.get("error"):

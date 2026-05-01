@@ -392,7 +392,7 @@ class Context:
             child_statuses = [update(child) for child in node.children]
             if any(status == NodeStatus.failed for status in child_statuses):
                 node.node_status = NodeStatus.failed
-            elif all(status == NodeStatus.success for status in child_statuses):
+            elif all(status in {NodeStatus.success, NodeStatus.completed} for status in child_statuses):
                 node.node_status = NodeStatus.success
             else:
                 node.node_status = NodeStatus.pending

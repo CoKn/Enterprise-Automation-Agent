@@ -61,11 +61,6 @@ class AppContainer:
 def build_container(base_dir: Path) -> AppContainer:
     db_dir = check_if_folder_exists(base_dir / "db")
 
-    llm_openai = OpenAIAdapter(
-        api_key=os.getenv("OPENAI_API_KEY"),
-        deployment_name=os.getenv("LLM_MODEL"),
-    )
-
     llm_azure_openai = AzureOpenAIAdapter(
         endpoint=os.getenv("AZURE_ENDPOINT"),
         api_key=os.getenv("AZURE_API_KEY"), 
@@ -100,7 +95,7 @@ def build_container(base_dir: Path) -> AppContainer:
 
     tools = MCPAdapter(
         endpoints=endpoints,
-        token_storage=token_storage,
+        token_storage=token_storage
     )
 
     memory = ChromadbAdapter(os.getenv("CHROMADB"))
@@ -117,5 +112,5 @@ def build_container(base_dir: Path) -> AppContainer:
         tools=tools,
         context_serializer=context_serializer,
         planner=planner,
-        template_renderer=template_renderer,
+        template_renderer=template_renderer
     )
